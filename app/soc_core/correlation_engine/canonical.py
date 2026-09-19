@@ -125,7 +125,7 @@ def validate(kind: str, directory: Path = DATASET_DIR) -> dict[str, Any]:
 
 
 def ground_truth_available(directory: Path = GROUND_TRUTH_DIR) -> bool:
-    return directory.is_dir() and any(p.is_file() for p in directory.iterdir())
+    return (directory / "ground_truth_50000.jsonl").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +512,10 @@ def canonical_result(directory: Path = DATASET_DIR, *, with_context: bool = True
                              for i, c in zip(incidents, contexts)],
         }
     has_truth = ground_truth_available()
+    evaluation = ({kind: evaluate_representation(kind, run=engine_runs[kind]) for kind in ("raw", "siem")}
+                  if has_truth else None)
+    quality = ({k: evaluation["raw"][k] for k in ("precision", "recall", "f1", "critical_evidence_recall")}
+               if evaluation else {"precision": NA, "recall": NA, "f1": NA, "critical_evidence_recall": NA})
     return {
         "dataset": "canonical_50k",
         "dataset_note": "Synthetic SOC benchmark dataset from the scenario author (two representations).",
@@ -520,8 +524,10 @@ def canonical_result(directory: Path = DATASET_DIR, *, with_context: bool = True
         "representations": representations,
         "evidence_context": context_section,
         "ground_truth_available": has_truth,
-        "ground_truth": "NOT YET PROVIDED" if not has_truth else "present (not yet evaluated)",
-        "quality_metrics": {"precision": NA, "recall": NA, "f1": NA, "critical_evidence_recall": NA},
+        "ground_truth": ("NOT YET PROVIDED" if not has_truth else
+                         "RECONSTRUCTED from generator ID allocation + README counts (not authoritative)"),
+        "quality_metrics": quality,
+        "evaluation": evaluation,
         "peak_memory_mb": peak_memory_mb(),
         "total_ms": round((time.perf_counter() - started) * 1000, 1),
         "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -553,6 +559,59 @@ def main(argv: list[str] | None = None) -> int:
           f"tokens~{c.get('estimated_tokens')} build {c.get('build_ms')} ms")
     print(f"Ground truth: {result['ground_truth']} | peak memory {result['peak_memory_mb']} MB | total {result['total_ms']:,} ms")
     return 0
+
+
+
+# ---------------------------------------------------------------------------
+# Evaluation against the (reconstructed) ground-truth artifact
+# ---------------------------------------------------------------------------
+
+GROUND_TRUTH_FILE: Final[Path] = GROUND_TRUTH_DIR / "ground_truth_50000.jsonl"
+
+
+def evaluate_representation(kind: str, truth_path: Path = GROUND_TRUTH_FILE,
+                            run: CanonicalRun | None = None) -> dict[str, Any]:
+    """Selection-level evaluation with the engine's DEFAULT configuration.
+
+    Semantics: the engine selects evidence; it does not classify.
+      TP = attack event selected      FP = background event selected
+      FN = attack event NOT selected (discarded, never "classified benign")
+      TN = background event not selected
+    """
+    from .evaluation import GroundTruth, evaluate   # local: evaluation-only path
+
+    truth = GroundTruth.from_jsonl(truth_path)
+    run = run or run_representation(kind)
+    ids = [e.event_id for e in run.result.events]
+    selected = set(run.result.selected_event_ids)
+    positives = truth.positive_ids
+    tp = len(selected & positives)
+    fp = len(selected - positives)
+    fn = len(positives - selected)
+    tn = len(ids) - tp - fp - fn
+    metrics = evaluate(selected, ids, truth).to_dict()
+    stages: dict[str, dict[str, int]] = {}
+    for event_id, label in truth.labels.items():
+        if label.is_attack_related:
+            row = stages.setdefault(label.attack_stage or "?", {"events": 0, "selected": 0})
+            row["events"] += 1
+            row["selected"] += event_id in selected
+    return {
+        "representation": kind,
+        "ground_truth": truth_path.name,
+        "ground_truth_status": "RECONSTRUCTED (see ground_truth_validation.json)",
+        "engine_config": "defaults (no tuning against ground truth)",
+        "events": len(ids), "selected": len(selected),
+        "TP": tp, "FP": fp, "FN": fn, "TN": tn,
+        "precision": metrics["precision"], "recall": metrics["recall"], "f1": metrics["f1"],
+        "critical_evidence_recall": metrics["critical_evidence_recall"],
+        "critical_total": metrics["critical_total"], "critical_retained": metrics["critical_retained"],
+        "missing_critical": metrics["missing_critical"],
+        "per_stage": dict(sorted(stages.items())),
+        "stages_with_any_selected_event": sum(1 for s in stages.values() if s["selected"]),
+        "stages_total": len(stages),
+        "semantics": "FN = attack event not selected as evidence (discarded), not 'classified benign'.",
+    }
 
 
 if __name__ == "__main__":

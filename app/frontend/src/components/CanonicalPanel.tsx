@@ -69,7 +69,17 @@ export function CanonicalPanel() {
         EvidenceContext (existing redacting engine): {ctx.generated ? `${n(ctx.incidents)} incident(s), ${n(ctx.evidence_objects)} objects, ~${n(ctx.estimated_tokens)} tokens` : "not generated"}.{" "}
         Only this redacted context is eligible for the AI investigator.
       </p>
-      <p className="offline-note">Ground truth: {data.ground_truth}. Precision / recall / F1 / critical evidence recall: N/A.</p>
+      {data.evaluation ? (
+        <p className="offline-note">
+          Ground truth: {data.ground_truth}. Raw: TP {data.evaluation.raw.TP} · FP {data.evaluation.raw.FP} · FN{" "}
+          {data.evaluation.raw.FN} (not selected, not "classified benign") · precision {String(data.evaluation.raw.precision)} ·
+          recall {String(data.evaluation.raw.recall)} · F1 {String(data.evaluation.raw.f1)} · critical evidence recall{" "}
+          {String(data.evaluation.raw.critical_evidence_recall)}. SIEM: TP {data.evaluation.siem.TP} · FP {data.evaluation.siem.FP} · FN{" "}
+          {data.evaluation.siem.FN}. Default engine settings, not tuned.
+        </p>
+      ) : (
+        <p className="offline-note">Ground truth: {data.ground_truth}. Precision / recall / F1 / critical evidence recall: N/A.</p>
+      )}
       <p className="small muted">{data.signals_label}</p>
       <details><summary>View attack-stage candidates</summary>
         <pre className="json">{JSON.stringify(raw.attack_stage_candidates, null, 1)}</pre>

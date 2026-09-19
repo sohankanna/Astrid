@@ -1,0 +1,180 @@
+{
+ "raw": {
+  "representation": "raw",
+  "ground_truth": "ground_truth_50000.jsonl",
+  "ground_truth_status": "RECONSTRUCTED (see ground_truth_validation.json)",
+  "engine_config": "defaults (no tuning against ground truth)",
+  "events": 50000,
+  "selected": 123,
+  "TP": 113,
+  "FP": 10,
+  "FN": 24,
+  "TN": 49853,
+  "precision": 0.9187,
+  "recall": 0.8248,
+  "f1": 0.8692,
+  "critical_evidence_recall": 0.8367,
+  "critical_total": 98,
+  "critical_retained": 82,
+  "missing_critical": [
+   "EVT-000064",
+   "EVT-000065",
+   "EVT-000066",
+   "EVT-000067",
+   "EVT-000068",
+   "EVT-000069",
+   "EVT-000070",
+   "EVT-000071",
+   "EVT-000072",
+   "EVT-000098",
+   "EVT-000099",
+   "EVT-000100",
+   "EVT-000101",
+   "EVT-000102",
+   "EVT-000103",
+   "EVT-000104"
+  ],
+  "per_stage": {
+   "S10_ARCHIVE_DELETION": {
+    "events": 8,
+    "selected": 8
+   },
+   "S1_RECON": {
+    "events": 14,
+    "selected": 14
+   },
+   "S2_BRUTE_FORCE": {
+    "events": 27,
+    "selected": 27
+   },
+   "S3_PASSWORD_SPRAY": {
+    "events": 1,
+    "selected": 1
+   },
+   "S5_PHISHING": {
+    "events": 2,
+    "selected": 1
+   },
+   "S6_ENDPOINT_COMPROMISE": {
+    "events": 10,
+    "selected": 10
+   },
+   "S7_CREDENTIAL_HARVESTING": {
+    "events": 14,
+    "selected": 14
+   },
+   "S7_VALID_ACCOUNT": {
+    "events": 8,
+    "selected": 1
+   },
+   "S8_FINANCE_DATA_STAGING": {
+    "events": 15,
+    "selected": 15
+   },
+   "S8_WEB_SHELL": {
+    "events": 20,
+    "selected": 12
+   },
+   "S9_USB_TRANSFER": {
+    "events": 10,
+    "selected": 10
+   },
+   "WEB01_FOOTHOLD": {
+    "events": 8,
+    "selected": 0
+   }
+  },
+  "stages_with_any_selected_event": 11,
+  "stages_total": 12,
+  "semantics": "FN = attack event not selected as evidence (discarded), not 'classified benign'."
+ },
+ "siem": {
+  "representation": "siem",
+  "ground_truth": "ground_truth_50000.jsonl",
+  "ground_truth_status": "RECONSTRUCTED (see ground_truth_validation.json)",
+  "engine_config": "defaults (no tuning against ground truth)",
+  "events": 50000,
+  "selected": 123,
+  "TP": 113,
+  "FP": 10,
+  "FN": 24,
+  "TN": 49853,
+  "precision": 0.9187,
+  "recall": 0.8248,
+  "f1": 0.8692,
+  "critical_evidence_recall": 0.8367,
+  "critical_total": 98,
+  "critical_retained": 82,
+  "missing_critical": [
+   "EVT-000064",
+   "EVT-000065",
+   "EVT-000066",
+   "EVT-000067",
+   "EVT-000068",
+   "EVT-000069",
+   "EVT-000070",
+   "EVT-000071",
+   "EVT-000072",
+   "EVT-000098",
+   "EVT-000099",
+   "EVT-000100",
+   "EVT-000101",
+   "EVT-000102",
+   "EVT-000103",
+   "EVT-000104"
+  ],
+  "per_stage": {
+   "S10_ARCHIVE_DELETION": {
+    "events": 8,
+    "selected": 8
+   },
+   "S1_RECON": {
+    "events": 14,
+    "selected": 14
+   },
+   "S2_BRUTE_FORCE": {
+    "events": 27,
+    "selected": 27
+   },
+   "S3_PASSWORD_SPRAY": {
+    "events": 1,
+    "selected": 1
+   },
+   "S5_PHISHING": {
+    "events": 2,
+    "selected": 1
+   },
+   "S6_ENDPOINT_COMPROMISE": {
+    "events": 10,
+    "selected": 10
+   },
+   "S7_CREDENTIAL_HARVESTING": {
+    "events": 14,
+    "selected": 14
+   },
+   "S7_VALID_ACCOUNT": {
+    "events": 8,
+    "selected": 1
+   },
+   "S8_FINANCE_DATA_STAGING": {
+    "events": 15,
+    "selected": 15
+   },
+   "S8_WEB_SHELL": {
+    "events": 20,
+    "selected": 12
+   },
+   "S9_USB_TRANSFER": {
+    "events": 10,
+    "selected": 10
+   },
+   "WEB01_FOOTHOLD": {
+    "events": 8,
+    "selected": 0
+   }
+  },
+  "stages_with_any_selected_event": 11,
+  "stages_total": 12,
+  "semantics": "FN = attack event not selected as evidence (discarded), not 'classified benign'."
+ }
+}

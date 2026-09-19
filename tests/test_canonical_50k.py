@@ -1,8 +1,8 @@
 """Canonical 50K dataset integration tests.
 
-Skipped when the dataset is not present. No ground truth is used or created:
-these tests check structure, determinism, measurement plumbing and the model
-boundary, never detection quality.
+Skipped when the dataset is not present. Ground-truth checks run only when the
+reconstructed artifact exists (scripts/build_canonical_ground_truth.py); these
+tests check structure, determinism, metric arithmetic and the model boundary.
 """
 
 from __future__ import annotations
@@ -93,13 +93,21 @@ class TestCanonicalDataset(unittest.TestCase):
         self.assertTrue(ctx["generated"])
         self.assertGreater(ctx["evidence_objects"], 0)
 
-    def test_no_ground_truth_no_quality_metrics(self) -> None:
-        self.assertFalse(self.result["ground_truth_available"])
-        self.assertEqual(self.result["ground_truth"], "NOT YET PROVIDED")
-        self.assertEqual(set(self.result["quality_metrics"].values()), {NA})
-        text = json.dumps(self.result)
-        for key in ('"precision": 0', '"recall": 0', '"f1": 0', '"precision": 1'):
-            self.assertNotIn(key, text)
+    def test_quality_metrics_only_with_ground_truth(self) -> None:
+        if not canonical.ground_truth_available():
+            self.assertEqual(self.result["ground_truth"], "NOT YET PROVIDED")
+            self.assertEqual(set(self.result["quality_metrics"].values()), {NA})
+            self.assertIsNone(self.result["evaluation"])
+            return
+        self.assertIn("RECONSTRUCTED", self.result["ground_truth"])
+        for kind in ("raw", "siem"):
+            ev = self.result["evaluation"][kind]
+            self.assertEqual(ev["TP"] + ev["FP"], ev["selected"])
+            self.assertEqual(ev["TP"] + ev["FN"], 137)
+            self.assertEqual(ev["TP"] + ev["FP"] + ev["FN"] + ev["TN"], 50_000)
+            self.assertAlmostEqual(ev["precision"], round(ev["TP"] / (ev["TP"] + ev["FP"]), 4))
+            self.assertAlmostEqual(ev["recall"], round(ev["TP"] / (ev["TP"] + ev["FN"]), 4))
+            self.assertEqual(ev["engine_config"], "defaults (no tuning against ground truth)")
 
     def test_deterministic_counts(self) -> None:
         again = canonical.run_representation("raw").result.summary()
@@ -138,6 +146,40 @@ class TestCanonicalDataset(unittest.TestCase):
         self.assertNotIn("neha", message, "usernames are pseudonymized in the context")
 
 
+@unittest.skipUnless(HAVE_DATASET and canonical.GROUND_TRUTH_FILE.is_file(), "reconstructed ground truth not present")
+class TestReconstructedGroundTruth(unittest.TestCase):
+    def test_artifact_integrity(self) -> None:
+        labels = [json.loads(line) for line in canonical.GROUND_TRUTH_FILE.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(labels), 50_000)
+        self.assertEqual(len({l["event_id"] for l in labels}), 50_000)
+        raw_ids = {r["event_id"] for _, r in canonical.iter_records(canonical.dataset_path("raw"))}
+        self.assertEqual({l["event_id"] for l in labels}, raw_ids)
+        for l in labels:
+            self.assertEqual(set(l), {"event_id", "attack_related", "attack_stage", "critical"})
+            if not l["attack_related"]:
+                self.assertIsNone(l["attack_stage"])
+                self.assertFalse(l["critical"])
+        validation = json.loads((canonical.GROUND_TRUTH_DIR / "ground_truth_validation.json").read_text(encoding="utf-8"))
+        self.assertFalse(validation["authoritative"])
+        self.assertEqual(validation["attack_related_count"], 137)
+        self.assertEqual(validation["counts_by_attack_stage"], {
+            "S10_ARCHIVE_DELETION": 8, "S1_RECON": 14, "S2_BRUTE_FORCE": 27, "S3_PASSWORD_SPRAY": 1,
+            "S5_PHISHING": 2, "S6_ENDPOINT_COMPROMISE": 10, "S7_CREDENTIAL_HARVESTING": 14, "S7_VALID_ACCOUNT": 8,
+            "S8_FINANCE_DATA_STAGING": 15, "S8_WEB_SHELL": 20, "S9_USB_TRANSFER": 10, "WEB01_FOOTHOLD": 8})
+
+    def test_labels_independent_of_engine(self) -> None:
+        source = (REPO_ROOT / "scripts" / "build_canonical_ground_truth.py").read_text(encoding="utf-8")
+        for engine_symbol in ("CorrelationEngine", "run_representation", "baseline_signals", "selected_event_ids"):
+            self.assertNotIn(engine_symbol, source)
+
+    def test_jsonl_loader(self) -> None:
+        from app.soc_core.correlation_engine.evaluation import GroundTruth
+
+        truth = GroundTruth.from_jsonl(canonical.GROUND_TRUTH_FILE)
+        self.assertEqual(len(truth.positive_ids), 137)
+        self.assertEqual(len(truth.critical_ids), 98)
+
+
 @unittest.skipUnless(HAVE_DATASET and HAVE_HTTP, "dataset or fastapi/httpx missing")
 class TestCanonicalEndpoint(unittest.TestCase):
     def test_endpoint(self) -> None:
@@ -151,7 +193,7 @@ class TestCanonicalEndpoint(unittest.TestCase):
         data = client.get("/api/efficiency/canonical").json()
         self.assertEqual(data["dataset"], "canonical_50k")
         self.assertEqual(data["representations"]["raw"]["events"], 50_000)
-        self.assertFalse(data["ground_truth_available"])
+        self.assertEqual(data["ground_truth_available"], canonical.ground_truth_available())
 
 
 if __name__ == "__main__":

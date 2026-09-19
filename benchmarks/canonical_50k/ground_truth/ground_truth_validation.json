@@ -1,0 +1,98 @@
+{
+ "total_events": 50000,
+ "labelled_events": 50000,
+ "attack_related_count": 137,
+ "benign_count": 49863,
+ "critical_attack_count": 98,
+ "counts_by_attack_stage": {
+  "S10_ARCHIVE_DELETION": 8,
+  "S1_RECON": 14,
+  "S2_BRUTE_FORCE": 27,
+  "S3_PASSWORD_SPRAY": 1,
+  "S5_PHISHING": 2,
+  "S6_ENDPOINT_COMPROMISE": 10,
+  "S7_CREDENTIAL_HARVESTING": 14,
+  "S7_VALID_ACCOUNT": 8,
+  "S8_FINANCE_DATA_STAGING": 15,
+  "S8_WEB_SHELL": 20,
+  "S9_USB_TRANSFER": 10,
+  "WEB01_FOOTHOLD": 8
+ },
+ "critical_by_attack_stage": {
+  "S10_ARCHIVE_DELETION": 8,
+  "S1_RECON": 14,
+  "S2_BRUTE_FORCE": 27,
+  "S3_PASSWORD_SPRAY": 1,
+  "S5_PHISHING": 2,
+  "S7_CREDENTIAL_HARVESTING": 7,
+  "S7_VALID_ACCOUNT": 8,
+  "S8_FINANCE_DATA_STAGING": 1,
+  "S8_WEB_SHELL": 12,
+  "S9_USB_TRANSFER": 10,
+  "WEB01_FOOTHOLD": 8
+ },
+ "duplicate_event_ids": 0,
+ "missing_event_ids": 0,
+ "unknown_stage_count": 0,
+ "source_files": {
+  "raw": "README (1).jsonl",
+  "siem": "README (2).jsonl",
+  "readme": "README (1).txt",
+  "sha256": {
+   "README (1).jsonl": "0487b2644002cbdb1dfcb91ad91de6c0a97efeae18443c4ce651afe714f059e8",
+   "README (2).jsonl": "1fe2178021b82ac9ebbf8ae74b1698fd15a9ca38552fb70ae2195c6296bdc6ff",
+   "README (1).txt": "9e394916e26ab6b8eeb56fafe67b9d79d4497087d25332fb6083fea4b24306e4"
+  }
+ },
+ "authoritative": false,
+ "label_status": "RECONSTRUCTED (generator not available)",
+ "methodology": {
+  "attack_related": "Generator ID-allocation artifact: EVT-000001..EVT-000137, validated by the structural checks below.",
+  "attack_stage": "README taxonomy; contiguous segments whose sizes equal README per-stage counts exactly, each validated by a content predicate.",
+  "critical": "Attack event containing a README-named scenario indicator that never occurs in background events: ['198.51.100.90', '10.10.20.17', 'CRED-WS07-001', 'export.zip', 'USB-0042']. Hostnames and victim username excluded (present in benign traffic).",
+  "independence": "No correlation-engine output or engine heuristic was used. Dataset files read-only."
+ },
+ "validation_checks": {
+  "ids_contiguous_1_to_50000": true,
+  "attack_block_time_ordered": true,
+  "background_adjacent_time_inversion_rate": 0.5031,
+  "attack_block_size_equals_readme_count": true,
+  "readme_indicators": {
+   "198.51.100.90": {
+    "in_attack_block": 65,
+    "in_background": 0
+   },
+   "10.10.20.17": {
+    "in_attack_block": 7,
+    "in_background": 0
+   },
+   "CRED-WS07-001": {
+    "in_attack_block": 7,
+    "in_background": 0
+   },
+   "export.zip": {
+    "in_attack_block": 17,
+    "in_background": 0
+   },
+   "USB-0042": {
+    "in_attack_block": 10,
+    "in_background": 0
+   }
+  },
+  "siem_ids_equal_raw_ids": true,
+  "segments_cover_block_exactly": true,
+  "stage_counts_equal_readme": true,
+  "segment_predicate_violations": []
+ },
+ "confidence": {
+  "attack_related": "HIGH: four independent structural checks agree with the README count.",
+  "attack_stage": "HIGH for 135/137 events: segment sizes match README counts exactly, and content is consistent. MEDIUM for EVT-000042 vs EVT-000043: which of the two is S3_PASSWORD_SPRAY and which is S7_VALID_ACCOUNT is inferred from message formatting (the authentication=SUCCESS tag).",
+  "critical": "MEDIUM: the definition is ours, derived from README metadata; the generator's own notion of criticality is unknown."
+ },
+ "limitations": [
+  "Labels are reconstructed, not the generator's hidden ground truth. Replace them when that artifact is delivered.",
+  "The README counts 137 'attack/suspicious' events; a background event that the generator considered suspicious would be missed only if it had an ID above 137, which the checks do not rule out.",
+  "Stage names follow the README's attack-stage distribution. The story's 'S7 Valid Account Pivot' has no separate code, so those events are S7_VALID_ACCOUNT.",
+  "'critical' is a documented proxy. Critical-evidence recall inherits that definition."
+ ]
+}

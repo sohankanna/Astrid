@@ -76,6 +76,25 @@ class GroundTruth:
             raise ValueError("ground truth file must be a list of labels or {\"labels\": [...]}")
         return cls.from_records(records, source=str(path))
 
+    @classmethod
+    def from_jsonl(cls, path: str | Path) -> "GroundTruth":
+        """One label per line, schema {event_id, attack_related, attack_stage, critical}
+        (the canonical-dataset artifact). Maps attack_related -> is_attack_related."""
+        records = []
+        with Path(path).open(encoding="utf-8") as handle:
+            for line_no, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                if not isinstance(item, dict) or "attack_related" not in item:
+                    raise ValueError(f"{path}:{line_no}: expected an object with attack_related")
+                unknown = set(item) - {"event_id", "attack_related", "attack_stage", "critical"}
+                if unknown:
+                    raise ValueError(f"{path}:{line_no}: unknown field(s) {sorted(unknown)}")
+                records.append({"event_id": item.get("event_id"), "is_attack_related": item["attack_related"],
+                                "attack_stage": item.get("attack_stage"), "critical": item.get("critical", False)})
+        return cls.from_records(records, source=str(path))
+
     def is_positive(self, event_id: str) -> bool:
         label = self.labels.get(event_id)
         return bool(label and label.is_attack_related)

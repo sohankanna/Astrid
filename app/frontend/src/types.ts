@@ -432,6 +432,9 @@ export interface CanonicalResult {
   evidence_context: { generated: boolean; incidents?: number; evidence_objects?: number; estimated_tokens?: number };
   ground_truth_available: boolean;
   ground_truth: string;
+  evaluation: Record<"raw" | "siem", { TP: number; FP: number; FN: number; TN: number;
+    precision: number | string; recall: number | string; f1: number | string;
+    critical_evidence_recall: number | string }> | null;
   peak_memory_mb: number | null;
   measured_at: string;
 }
