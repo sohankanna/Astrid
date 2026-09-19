@@ -188,6 +188,11 @@ def create_app(service: SocService | None = None) -> FastAPI:
     def efficiency_live() -> dict[str, Any]:
         return soc.efficiency_live()
 
+    @app.get("/api/efficiency/canonical")
+    def efficiency_canonical(refresh: bool = False) -> dict[str, Any]:
+        """Canonical 50K scenario: raw vs SIEM vs our engine (measured)."""
+        return soc.canonical_benchmark(refresh)
+
     # -- correlation engine (debug inspection only) ------------------------------
 
     @app.get("/api/correlation/debug")

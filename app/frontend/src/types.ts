@@ -400,3 +400,38 @@ export interface LiveUsage {
     estimated_input_tokens: number;
   }[];
 }
+
+// ---------------------------------------------------------------- canonical 50K scenario
+
+export interface CanonicalRepresentation {
+  label: string;
+  file: string;
+  events: number;
+  as_delivered_tokens: number;
+  engine: {
+    events: number;
+    relevant_events: number;
+    correlated_events: number;
+    evidence_objects: number;
+    context_tokens: number;
+    reduction_vs_as_delivered_percent: number;
+    engine_latency_ms: number;
+    latency_ms: Record<string, number>;
+  };
+  signals: { rule_id: string; alert_id: string; title: string; events: number }[];
+  attack_stage_candidates: Record<string, unknown>[];
+  relationships: Record<string, unknown>;
+}
+
+export interface CanonicalResult {
+  dataset: string;
+  dataset_note: string;
+  validation: Record<"raw" | "siem", { records: number; valid: boolean; problems: Record<string, number> }>;
+  signals_label: string;
+  representations: Record<"raw" | "siem", CanonicalRepresentation>;
+  evidence_context: { generated: boolean; incidents?: number; evidence_objects?: number; estimated_tokens?: number };
+  ground_truth_available: boolean;
+  ground_truth: string;
+  peak_memory_mb: number | null;
+  measured_at: string;
+}

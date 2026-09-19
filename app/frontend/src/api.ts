@@ -7,6 +7,7 @@ import type {
   AlertView,
   AnalyzeResult,
   BenchmarkStatus,
+  CanonicalResult,
   CostComparison,
   CostRequest,
   Fidelity,
@@ -116,4 +117,6 @@ export const api = {
   cost: (body: CostRequest) =>
     request<CostComparison>("/api/efficiency/cost", { method: "POST", body: JSON.stringify(body) }),
   live: () => request<LiveUsage>("/api/efficiency/live"),
+  canonical: (refresh = false) =>
+    request<CanonicalResult>(`/api/efficiency/canonical${refresh ? "?refresh=true" : ""}`),
 };

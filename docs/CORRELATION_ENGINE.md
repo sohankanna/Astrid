@@ -312,3 +312,34 @@ rejected, and `critical` requires `is_attack_related`.
    `reduction_ratio` and `critical_evidence_recall`.
 6. Feed `selected_event_ids` into the EvidenceContext Engine as its relevance
    input. Redaction and the model boundary stay as they are.
+
+## 14. Canonical 50K scenario integration
+
+Adapter: `app/soc_core/correlation_engine/canonical.py` (all dataset-specific parsing lives here; no
+scenario values are hard-coded, which a test checks).
+
+```powershell
+app\.venv\Scripts\python.exe -m app.soc_core.correlation_engine.canonical   # validate + measure + cache
+```
+
+- Validates both representations: exactly 50,000 records each, unique IDs, timestamps, source types, no
+  malformed JSON. The dataset files are read only, never modified.
+- Generic `key=value` message parsing maps both RAW and SIEM records onto one generic event shape.
+- **Baseline signals** stand in for detections, because the dataset carries no alerts. They are generic
+  heuristics, applied identically to both representations, and **are not ground truth**:
+  external (non-RFC1918) source address, failed-logon burst (≥5 in 10 min from one source), success after
+  a burst, and rare event shape (≤2 occurrences).
+- Measured (2026-09-19):
+
+  | Representation | As delivered (est. tokens, never sent) | Engine output | Engine latency |
+  |---|---:|---|---:|
+  | Raw | 4,130,453 | 50,000 → 123 relevant → 22 objects → ~2,355 tokens | ~1.9 s |
+  | SIEM | 5,204,426 | 50,000 → 123 relevant → 22 objects → ~2,384 tokens | ~2.0 s |
+
+- **EvidenceContext:** built by the existing Stage 2 engine from the selected events only (1 incident,
+  25 objects, ~9.5K tokens, usernames pseudonymized).
+- **Console:** the `canonical-50k` scenario runs the existing incident, AI and response path on the
+  selected evidence. Only the redacted EvidenceContext can reach a model; a test asserts this.
+- **API:** `GET /api/efficiency/canonical`. The Lab's Summary tab shows a "CANONICAL 50K SCENARIO" panel.
+- **Ground truth: NOT YET PROVIDED.** Precision, recall, F1 and critical evidence recall stay N/A.
+  Coverage of later attack stages by the baseline signals is therefore **unmeasured**.

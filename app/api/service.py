@@ -21,6 +21,7 @@ Security posture
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
@@ -44,6 +45,7 @@ from ..soc_core.detections import (
 from ..soc_core.events import SecurityEvent, load_events
 from ..soc_core.mitre import TECHNIQUES
 from ..soc_core.correlation_engine import CorrelationEngine as EvidenceCorrelationEngine
+from ..soc_core.correlation_engine import canonical
 from ..soc_core.efficiency import (
     BASELINE_LABEL,
     BenchmarkRunner,
@@ -74,6 +76,7 @@ from ..soc_core.risk import RiskAssessment, score_incident
 from ..soc_core.scenarios import SCENARIOS, Scenario, events_for_scenario
 
 logger = logging.getLogger("soc.api")
+CANONICAL_SCENARIO_ID: Final[str] = "canonical-50k"
 
 DATA_DIR: Final[Path] = Path(__file__).resolve().parents[2] / "data"
 ENDPOINT_DATASET: Final[Path] = DATA_DIR / "sample_security_events.json"
@@ -216,6 +219,16 @@ def build_catalog() -> dict[str, ScenarioSpec]:
                 scenario.expect_alerts,
             )
         )
+    specs.append(ScenarioSpec(
+        scenario_id=CANONICAL_SCENARIO_ID,
+        name="Canonical 50K SOC benchmark",
+        description=("50,000 raw events reduced by the correlation engine; the console shows only the selected "
+                     "evidence. Alerts are generic baseline signals, not ground truth."),
+        group="Canonical Benchmark",
+        profile="hybrid",
+        datasets=(),
+        rules=lambda: [],
+    ))
     return {spec.scenario_id: spec for spec in specs}
 
 
@@ -306,6 +319,7 @@ class SocService:
         self._lock = threading.RLock()
         self.efficiency = efficiency or BenchmarkRunner()
         self._fidelity: dict[str, Any] | None = None
+        self._canonical: dict[str, Any] | None = None
         self.catalog = build_catalog()
         self.provider_config = configured_provider()
         if analyst is not None:
@@ -343,6 +357,8 @@ class SocService:
         if spec is None:
             raise NotFoundError(f"unknown scenario {scenario_id!r}")
 
+        if spec.scenario_id == CANONICAL_SCENARIO_ID:
+            return self._run_canonical(spec)
         events: list[SecurityEvent] = []
         for dataset in spec.datasets:
             events.extend(load_events(dataset))
@@ -366,6 +382,24 @@ class SocService:
             "scenario run: %s events=%d alerts=%d incidents=%d injection_findings=%d",
             scenario_id, len(events), len(state.alerts), len(state.incidents), len(state.findings),
         )
+        return self.metrics()
+
+    def _run_canonical(self, spec: ScenarioSpec) -> dict[str, Any]:
+        """Canonical 50K: the correlation engine reduces the raw telemetry; the
+        console (incidents, EvidenceContext, AI, response) then runs on the
+        selected evidence only. Raw telemetry never reaches the AI path."""
+        run = canonical.run_representation("raw")
+        events, alerts = canonical.console_inputs(run.events, run.signals, run.result.selected_event_ids)
+        state = _RunState(spec=spec, started_at=datetime.now(timezone.utc), events=events)
+        state.findings = screen_for_injection(events)
+        state.alerts = alerts
+        for incident in CorrelationEngine().correlate(state.alerts, events):
+            state.incidents[incident.incident_id] = incident
+            state.risk[incident.incident_id] = score_incident(incident)
+        with self._lock:
+            self._state = state
+        logger.info("scenario run: %s raw=%d selected=%d alerts=%d incidents=%d", spec.scenario_id,
+                    len(run.events), len(events), len(alerts), len(state.incidents))
         return self.metrics()
 
     @property
@@ -643,6 +677,27 @@ class SocService:
             "provider": configured,
             "runs": runs,
         }
+
+    # -- canonical 50K benchmark ------------------------------------------------
+
+    def canonical_benchmark(self, refresh: bool = False) -> dict[str, Any]:
+        """Measured canonical 50K result (cached on disk by the CLI or the
+        first request). Offline; nothing here calls a model."""
+        with self._lock:
+            if not refresh and self._canonical is None and canonical.CACHE_FILE.is_file():
+                try:
+                    self._canonical = json.loads(canonical.CACHE_FILE.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    self._canonical = None      # corrupt cache: recompute, never trust
+            if refresh or self._canonical is None:
+                try:
+                    result = canonical.canonical_result()
+                except canonical.DatasetError as exc:
+                    raise NotFoundError(f"canonical dataset unavailable: {exc}") from exc
+                canonical.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                canonical.CACHE_FILE.write_text(json.dumps(result, indent=1), encoding="utf-8")
+                self._canonical = result
+            return self._canonical
 
     # -- correlation engine (Stage 3.5, debug only) ---------------------------
 

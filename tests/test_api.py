@@ -73,11 +73,12 @@ class TestScenarios(unittest.TestCase):
 
     def test_catalog_derives_from_existing_registries(self) -> None:
         scenarios = self.soc.list_scenarios()
-        self.assertEqual(len(scenarios), 3 + 8 + 11)
+        self.assertEqual(len(scenarios), 3 + 8 + 11 + 1)  # + canonical 50K
         groups = {s["group"] for s in scenarios}
         self.assertEqual(
             groups,
-            {"Hybrid Attack", "Endpoint Attack", "Cloud Attack", "Benign Activity", "Prompt Injection Attempt"},
+            {"Hybrid Attack", "Endpoint Attack", "Cloud Attack", "Benign Activity", "Prompt Injection Attempt",
+             "Canonical Benchmark"},
         )
         self.assertEqual(sum(1 for s in scenarios if s["active"]), 1)
 
@@ -315,7 +316,7 @@ class TestHttpApi(unittest.TestCase):
         self.assertEqual(len(self.client.get("/api/screening").json()), 4)
 
     def test_scenarios(self) -> None:
-        self.assertEqual(len(self.client.get("/api/scenarios").json()), 22)
+        self.assertEqual(len(self.client.get("/api/scenarios").json()), 23)
         run = self.client.post("/api/scenarios/cloud-k/run")
         self.assertEqual(run.status_code, 200)
         self.assertEqual(run.json()["scenario"]["scenario_id"], "cloud-k")
