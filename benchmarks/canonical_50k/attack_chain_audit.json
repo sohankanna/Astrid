@@ -1,0 +1,721 @@
+{
+ "dataset": {
+  "raw": "README (1).jsonl",
+  "siem": "README (2).jsonl"
+ },
+ "read_only": true,
+ "method": "Content predicates applied to all 50,000 raw events, independent of event-ID ranges and of the ground truth. The engine output (default settings) is read only for the 'selected' columns.",
+ "stages": [
+  {
+   "stage": "S1_RECON",
+   "ground_truth_stage": "S1_RECON",
+   "telemetry_exists": true,
+   "evidence_events": 14,
+   "event_ids": "EVT-000001..000014",
+   "first_seen": "2026-09-19T09:58:00Z",
+   "last_seen": "2026-09-19T09:59:18Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [
+     "10.10.10.10"
+    ],
+    "host": [
+     "FW01",
+     "WEB01"
+    ],
+    "user": [],
+    "action": [
+     "connection"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [
+     "200",
+     "403",
+     "404"
+    ],
+    "source_type": [
+     "apache_access",
+     "firewall",
+     "web_application"
+    ],
+    "sample_messages": [
+     "src=198.51.100.90 dst=10.10.10.10 proto=TCP dport=8080 action=connection",
+     "client=198.51.100.90 host=WEB01 request=\"GET /login HTTP/1.1\" status=403"
+    ]
+   },
+   "selected_raw": 14,
+   "selected_siem": 14,
+   "ground_truth_attack_related": 14,
+   "ground_truth_same_stage": 14,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 14,
+   "evidence_type": "OBSERVED",
+   "justification": "Firewall connections, /login and /robots.txt probes, and app logs with usernames_enumerated from the attacker IP."
+  },
+  {
+   "stage": "S2_BRUTE_FORCE",
+   "ground_truth_stage": "S2_BRUTE_FORCE",
+   "telemetry_exists": true,
+   "evidence_events": 27,
+   "event_ids": "EVT-000015..000041",
+   "first_seen": "2026-09-19T09:59:40Z",
+   "last_seen": "2026-09-19T10:01:24Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [],
+    "host": [
+     "WEB01"
+    ],
+    "user": [
+     "admin",
+     "ananya",
+     "arjun",
+     "finance01",
+     "neha",
+     "priya",
+     "rahul",
+     "rohan"
+    ],
+    "action": [
+     "EventID 4625"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [
+     "failure"
+    ],
+    "source_type": [
+     "windows_security"
+    ],
+    "sample_messages": [
+     "host=WEB01 EventID=4625 AccountName=neha IpAddress=198.51.100.90 Status=0xC000006D authentication=FAILURE",
+     "host=WEB01 EventID=4625 AccountName=rahul IpAddress=198.51.100.90 Status=0xC000006D authentication=FAILURE"
+    ]
+   },
+   "selected_raw": 27,
+   "selected_siem": 27,
+   "ground_truth_attack_related": 27,
+   "ground_truth_same_stage": 27,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 27,
+   "evidence_type": "OBSERVED",
+   "justification": "EventID 4625 failures from the attacker IP. They cycle over 8 accounts, so the pattern is also spray-shaped."
+  },
+  {
+   "stage": "S3_PASSWORD_SPRAY",
+   "ground_truth_stage": "S3_PASSWORD_SPRAY",
+   "telemetry_exists": true,
+   "evidence_events": 1,
+   "event_ids": "EVT-000042",
+   "first_seen": "2026-09-19T10:01:28Z",
+   "last_seen": "2026-09-19T10:01:28Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [],
+    "host": [
+     "WEB01"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "EventID 4624"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [
+     "0x0"
+    ],
+    "source_type": [
+     "windows_security"
+    ],
+    "sample_messages": [
+     "host=WEB01 EventID=4624 AccountName=neha LogonType=3 IpAddress=198.51.100.90 Status=0x0 authentication=SUCCESS"
+    ]
+   },
+   "selected_raw": 1,
+   "selected_siem": 1,
+   "ground_truth_attack_related": 1,
+   "ground_truth_same_stage": 1,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 1,
+   "evidence_type": "INFERRED",
+   "justification": "The one event is a SUCCESSFUL logon. Calling it 'password spray' relies on the preceding multi-account failures (S2). The spray behaviour itself is observed only in the S2 events."
+  },
+  {
+   "stage": "S7_VALID_ACCOUNT (initial)",
+   "ground_truth_stage": "S7_VALID_ACCOUNT",
+   "telemetry_exists": true,
+   "evidence_events": 1,
+   "event_ids": "EVT-000043",
+   "first_seen": "2026-09-19T10:01:45Z",
+   "last_seen": "2026-09-19T10:01:45Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [],
+    "host": [
+     "WEB01"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "EventID 4624"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [
+     "0x0"
+    ],
+    "source_type": [
+     "windows_security"
+    ],
+    "sample_messages": [
+     "host=WEB01 EventID=4624 AccountName=neha LogonType=3 IpAddress=198.51.100.90 Status=0x0"
+    ]
+   },
+   "selected_raw": 1,
+   "selected_siem": 1,
+   "ground_truth_attack_related": 1,
+   "ground_truth_same_stage": 1,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 1,
+   "evidence_type": "CORRELATED",
+   "justification": "Observed 4624 success for neha from the attacker IP. That it is a compromised valid account follows from the preceding failures from the same IP."
+  },
+  {
+   "stage": "S8_WEB_SHELL",
+   "ground_truth_stage": "S8_WEB_SHELL",
+   "telemetry_exists": true,
+   "evidence_events": 20,
+   "event_ids": "EVT-000044..000063",
+   "first_seen": "2026-09-19T10:02:00Z",
+   "last_seen": "2026-09-19T10:03:59Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [],
+    "host": [
+     "WEB01"
+    ],
+    "user": [
+     "tomcat"
+    ],
+    "action": [
+     "EventID 1"
+    ],
+    "process": [
+     "cmd.exe"
+    ],
+    "file_resource": [],
+    "status": [
+     "200"
+    ],
+    "source_type": [
+     "apache_access",
+     "sysmon_process"
+    ],
+    "sample_messages": [
+     "client=198.51.100.90 host=WEB01 request=\"POST /uploads/cmd.jsp HTTP/1.1\" status=200 command=\"whoami\"",
+     "client=198.51.100.90 host=WEB01 request=\"POST /uploads/cmd.jsp HTTP/1.1\" status=200 command=\"whoami\""
+    ]
+   },
+   "selected_raw": 12,
+   "selected_siem": 12,
+   "ground_truth_attack_related": 20,
+   "ground_truth_same_stage": 20,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 20,
+   "evidence_type": "OBSERVED",
+   "justification": "POST /uploads/cmd.jsp with command= parameters, and tomcat java.exe spawning cmd.exe on WEB01."
+  },
+  {
+   "stage": "WEB01_FOOTHOLD",
+   "ground_truth_stage": "WEB01_FOOTHOLD",
+   "telemetry_exists": true,
+   "evidence_events": 8,
+   "event_ids": "EVT-000064..000071",
+   "first_seen": "2026-09-19T10:04:10Z",
+   "last_seen": "2026-09-19T10:05:20Z",
+   "observables": {
+    "source_ip": [
+     "10.10.10.10"
+    ],
+    "destination_ip": [
+     "198.51.100.90"
+    ],
+    "host": [
+     "FW01"
+    ],
+    "user": [],
+    "action": [
+     "ALLOW"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [],
+    "source_type": [
+     "firewall"
+    ],
+    "sample_messages": [
+     "src=10.10.10.10 dst=198.51.100.90 proto=TCP sport=48475 dport=4444 action=ALLOW",
+     "src=10.10.10.10 dst=198.51.100.90 proto=TCP sport=45085 dport=4444 action=ALLOW"
+    ]
+   },
+   "selected_raw": 0,
+   "selected_siem": 0,
+   "ground_truth_attack_related": 8,
+   "ground_truth_same_stage": 8,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 8,
+   "evidence_type": "CORRELATED",
+   "justification": "Observed outbound ALLOW connections from WEB01 to the attacker on port 4444. Reading them as a reverse-shell foothold relies on the web-shell activity just before."
+  },
+  {
+   "stage": "S7_CREDENTIAL_HARVESTING",
+   "ground_truth_stage": "S7_CREDENTIAL_HARVESTING",
+   "telemetry_exists": true,
+   "evidence_events": 14,
+   "event_ids": "EVT-000084..000097",
+   "first_seen": "2026-09-19T10:14:50Z",
+   "last_seen": "2026-09-19T10:15:42Z",
+   "observables": {
+    "source_ip": [],
+    "destination_ip": [],
+    "host": [
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "EventID 1",
+     "READ"
+    ],
+    "process": [
+     "browserdump.exe"
+    ],
+    "file_resource": [
+     "C:\\Users\\neha\\AppData\\Local\\Browser\\User Data\\Login Data"
+    ],
+    "status": [],
+    "source_type": [
+     "file_audit",
+     "sysmon_process"
+    ],
+    "sample_messages": [
+     "host=WS07 user=neha EventID=1 Image=C:\\Tools\\browserdump.exe CommandLine=\"browserdump.exe --profile LoginData\"",
+     "host=WS07 user=neha EventID=1 Image=C:\\Tools\\browserdump.exe CommandLine=\"browserdump.exe --profile LoginData\""
+    ]
+   },
+   "selected_raw": 14,
+   "selected_siem": 14,
+   "ground_truth_attack_related": 14,
+   "ground_truth_same_stage": 14,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 14,
+   "evidence_type": "OBSERVED",
+   "justification": "browserdump.exe --profile LoginData on WS07, and file reads of Login Data tagged artifact=CRED-WS07-001."
+  },
+  {
+   "stage": "S7_VALID_ACCOUNT (pivot)",
+   "ground_truth_stage": "S7_VALID_ACCOUNT",
+   "telemetry_exists": true,
+   "evidence_events": 7,
+   "event_ids": "EVT-000098..000104",
+   "first_seen": "2026-09-19T10:16:00Z",
+   "last_seen": "2026-09-19T10:16:42Z",
+   "observables": {
+    "source_ip": [
+     "10.10.20.17"
+    ],
+    "destination_ip": [],
+    "host": [
+     "WEB01"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "EventID 4624"
+    ],
+    "process": [],
+    "file_resource": [],
+    "status": [
+     "0x0"
+    ],
+    "source_type": [
+     "windows_security"
+    ],
+    "sample_messages": [
+     "host=WEB01 EventID=4624 AccountName=neha LogonType=3 IpAddress=10.10.20.17 Status=0x0 source_host=WS07",
+     "host=WEB01 EventID=4624 AccountName=neha LogonType=3 IpAddress=10.10.20.17 Status=0x0 source_host=WS07"
+    ]
+   },
+   "selected_raw": 0,
+   "selected_siem": 0,
+   "ground_truth_attack_related": 7,
+   "ground_truth_same_stage": 7,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 7,
+   "evidence_type": "CORRELATED",
+   "justification": "Observed 4624 neha logons on WEB01 from WS07's IP (source_host=WS07). Calling them a pivot with harvested credentials relies on the S7 credential-harvesting events just before."
+  },
+  {
+   "stage": "S8_FINANCE_DATA_STAGING",
+   "ground_truth_stage": "S8_FINANCE_DATA_STAGING",
+   "telemetry_exists": true,
+   "evidence_events": 15,
+   "event_ids": "EVT-000105..000119",
+   "first_seen": "2026-09-19T10:17:00Z",
+   "last_seen": "2026-09-19T10:18:30Z",
+   "observables": {
+    "source_ip": [],
+    "destination_ip": [],
+    "host": [
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "ARCHIVE",
+     "READ"
+    ],
+    "process": [],
+    "file_resource": [
+     "C:\\Finance\\Q3\\budget.xlsx",
+     "C:\\Finance\\Q3\\finance_data.xlsx",
+     "C:\\Finance\\Q3\\forecast.xlsx"
+    ],
+    "status": [],
+    "source_type": [
+     "file_audit"
+    ],
+    "sample_messages": [
+     "host=WS07 user=neha file_action=READ path=\"C:\\Finance\\Q3\\budget.xlsx\" classification=CONFIDENTIAL",
+     "host=WS07 user=neha file_action=READ path=\"C:\\Finance\\Q3\\forecast.xlsx\" classification=CONFIDENTIAL"
+    ]
+   },
+   "selected_raw": 15,
+   "selected_siem": 15,
+   "ground_truth_attack_related": 15,
+   "ground_truth_same_stage": 15,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 15,
+   "evidence_type": "OBSERVED",
+   "justification": "CONFIDENTIAL finance file reads, then file_action=ARCHIVE creating export.zip."
+  },
+  {
+   "stage": "S9_USB_TRANSFER",
+   "ground_truth_stage": "S9_USB_TRANSFER",
+   "telemetry_exists": true,
+   "evidence_events": 10,
+   "event_ids": "EVT-000120..000129",
+   "first_seen": "2026-09-19T10:19:00Z",
+   "last_seen": "2026-09-19T10:19:54Z",
+   "observables": {
+    "source_ip": [],
+    "destination_ip": [],
+    "host": [
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "COPY",
+     "DeviceConnected"
+    ],
+    "process": [],
+    "file_resource": [
+     "USB-0042"
+    ],
+    "status": [],
+    "source_type": [
+     "usb"
+    ],
+    "sample_messages": [
+     "host=WS07 user=neha DeviceConnected device_id=USB-0042 mount=E:\\ vendor=SYNTHETIC",
+     "host=WS07 user=neha file_action=COPY source=\"C:\\Users\\neha\\Desktop\\export.zip\" destination=\"E:\\export.zip\" device_id=USB-0042 size=28473921"
+    ]
+   },
+   "selected_raw": 10,
+   "selected_siem": 10,
+   "ground_truth_attack_related": 10,
+   "ground_truth_same_stage": 10,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 10,
+   "evidence_type": "OBSERVED",
+   "justification": "USB-0042 connect, COPY of export.zip to E:, then disconnect."
+  },
+  {
+   "stage": "S10_ARCHIVE_DELETION",
+   "ground_truth_stage": "S10_ARCHIVE_DELETION",
+   "telemetry_exists": true,
+   "evidence_events": 8,
+   "event_ids": "EVT-000130..000137",
+   "first_seen": "2026-09-19T10:20:20Z",
+   "last_seen": "2026-09-19T10:21:09Z",
+   "observables": {
+    "source_ip": [],
+    "destination_ip": [],
+    "host": [
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "DELETE"
+    ],
+    "process": [],
+    "file_resource": [
+     "C:\\Users\\neha\\Desktop\\export.zip"
+    ],
+    "status": [],
+    "source_type": [
+     "file_audit"
+    ],
+    "sample_messages": [
+     "host=WS07 user=neha file_action=DELETE path=\"C:\\Users\\neha\\Desktop\\export.zip\" recoverable=true",
+     "host=WS07 user=neha file_action=DELETE path=\"C:\\Users\\neha\\Desktop\\export.zip\" recoverable=true"
+    ]
+   },
+   "selected_raw": 8,
+   "selected_siem": 8,
+   "ground_truth_attack_related": 8,
+   "ground_truth_same_stage": 8,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 8,
+   "evidence_type": "OBSERVED",
+   "justification": "file_action=DELETE of C:\\Users\\neha\\Desktop\\export.zip."
+  }
+ ],
+ "stages_not_in_diagram": [
+  {
+   "stage": "S5_PHISHING (not in diagram)",
+   "ground_truth_stage": "S5_PHISHING",
+   "telemetry_exists": true,
+   "evidence_events": 2,
+   "event_ids": "EVT-000072..000073",
+   "first_seen": "2026-09-19T10:13:00Z",
+   "last_seen": "2026-09-19T10:13:25Z",
+   "observables": {
+    "source_ip": [
+     "198.51.100.90"
+    ],
+    "destination_ip": [],
+    "host": [
+     "MAIL01",
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "CREATE",
+     "delivered"
+    ],
+    "process": [],
+    "file_resource": [
+     "C:\\Users\\neha\\Downloads\\invoice.pdf.exe"
+    ],
+    "status": [],
+    "source_type": [
+     "endpoint_file",
+     "mail_gateway"
+    ],
+    "sample_messages": [
+     "mailserver=MAIL01 from=\"attacker@evil.example\" sender_ip=198.51.100.90 to=\"neha@corp.local\" subject=\"Invoice\" attachment=\"invoice.pdf.exe\" action=delivered",
+     "host=WS07 user=neha file_action=CREATE path=\"C:\\Users\\neha\\Downloads\\invoice.pdf.exe\" source_ip=198.51.100.90"
+    ]
+   },
+   "selected_raw": 1,
+   "selected_siem": 1,
+   "ground_truth_attack_related": 2,
+   "ground_truth_same_stage": 2,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 2,
+   "evidence_type": "OBSERVED",
+   "justification": "Mail from the attacker IP delivering invoice.pdf.exe to neha, and the file created on WS07."
+  },
+  {
+   "stage": "S6_ENDPOINT_COMPROMISE (not in diagram)",
+   "ground_truth_stage": "S6_ENDPOINT_COMPROMISE",
+   "telemetry_exists": true,
+   "evidence_events": 10,
+   "event_ids": "EVT-000074..000083",
+   "first_seen": "2026-09-19T10:13:40Z",
+   "last_seen": "2026-09-19T10:14:25Z",
+   "observables": {
+    "source_ip": [],
+    "destination_ip": [],
+    "host": [
+     "WS07"
+    ],
+    "user": [
+     "neha"
+    ],
+    "action": [
+     "EventID 1"
+    ],
+    "process": [
+     "invoice.pdf.exe",
+     "powershell.exe"
+    ],
+    "file_resource": [],
+    "status": [],
+    "source_type": [
+     "sysmon_process"
+    ],
+    "sample_messages": [
+     "host=WS07 user=neha EventID=1 Image=C:\\Users\\neha\\Downloads\\invoice.pdf.exe ParentImage=C:\\Windows\\explorer.exe CommandLine=\"invoice.pdf.exe\"",
+     "host=WS07 user=neha EventID=1 Image=C:\\Users\\neha\\Downloads\\invoice.pdf.exe ParentImage=C:\\Windows\\explorer.exe CommandLine=\"invoice.pdf.exe\""
+    ]
+   },
+   "selected_raw": 10,
+   "selected_siem": 10,
+   "ground_truth_attack_related": 10,
+   "ground_truth_same_stage": 10,
+   "matches_outside_ground_truth": 0,
+   "siem_carries_same_message": 10,
+   "evidence_type": "OBSERVED",
+   "justification": "invoice.pdf.exe executed, then hidden PowerShell, on WS07."
+  }
+ ],
+ "transitions": [
+  {
+   "from": "S1_RECON",
+   "to": "S2_BRUTE_FORCE",
+   "shared_observed_entities": [
+    "host:WEB01",
+    "ip:198.51.100.90"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S2_BRUTE_FORCE",
+   "to": "S3_PASSWORD_SPRAY",
+   "shared_observed_entities": [
+    "host:WEB01",
+    "ip:198.51.100.90",
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S3_PASSWORD_SPRAY",
+   "to": "S7_VALID_ACCOUNT (initial)",
+   "shared_observed_entities": [
+    "host:WEB01",
+    "ip:198.51.100.90",
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S7_VALID_ACCOUNT (initial)",
+   "to": "S8_WEB_SHELL",
+   "shared_observed_entities": [
+    "host:WEB01",
+    "ip:198.51.100.90"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S8_WEB_SHELL",
+   "to": "WEB01_FOOTHOLD",
+   "shared_observed_entities": [
+    "ip:198.51.100.90"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "WEB01_FOOTHOLD",
+   "to": "S7_CREDENTIAL_HARVESTING",
+   "shared_observed_entities": [],
+   "time_ordered": true,
+   "evidence_type": "INFERRED"
+  },
+  {
+   "from": "S7_CREDENTIAL_HARVESTING",
+   "to": "S7_VALID_ACCOUNT (pivot)",
+   "shared_observed_entities": [
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S7_VALID_ACCOUNT (pivot)",
+   "to": "S8_FINANCE_DATA_STAGING",
+   "shared_observed_entities": [
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S8_FINANCE_DATA_STAGING",
+   "to": "S9_USB_TRANSFER",
+   "shared_observed_entities": [
+    "file:export.zip",
+    "host:WS07",
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  },
+  {
+   "from": "S9_USB_TRANSFER",
+   "to": "S10_ARCHIVE_DELETION",
+   "shared_observed_entities": [
+    "file:export.zip",
+    "host:WS07",
+    "user:neha"
+   ],
+   "time_ordered": true,
+   "evidence_type": "CORRELATED"
+  }
+ ],
+ "bridge_links_via_s5_s6": {
+  "WEB01_FOOTHOLD -> S5_PHISHING": [
+   "ip:198.51.100.90"
+  ],
+  "S5_PHISHING -> S6_ENDPOINT_COMPROMISE": [
+   "file:invoice.pdf.exe",
+   "host:WS07",
+   "user:neha"
+  ],
+  "S6_ENDPOINT_COMPROMISE -> S7_CREDENTIAL_HARVESTING": [
+   "host:WS07",
+   "user:neha"
+  ]
+ },
+ "verdict": {
+  "stages_without_telemetry": [],
+  "diagram_is": "B) a correlation/inference over telemetry: every diagram stage has concrete OBSERVED telemetry, but several stage labels and one transition are interpretations",
+  "key_findings": [
+   "S3_PASSWORD_SPRAY is INFERRED: its only event is a successful logon. The spray pattern is visible in the S2 failures.",
+   "WEB01_FOOTHOLD -> S7_CREDENTIAL_HARVESTING shares no observed entity. The diagram skips the observed bridge S5_PHISHING -> S6_ENDPOINT_COMPROMISE (attacker IP -> invoice.pdf.exe -> WS07/neha), which is how WS07 was compromised.",
+   "WEB01 foothold and WS07 compromise are linked only through the attacker IP. The telemetry shows no lateral movement from WEB01 to WS07.",
+   "Every stage's behaviour is directly present in the raw telemetry. The SIEM file carries the same messages."
+  ]
+ }
+}
