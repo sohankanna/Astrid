@@ -455,3 +455,53 @@ export interface CanonicalResult {
   peak_memory_mb: number | null;
   measured_at: string;
 }
+
+// ---------------------------------------------------------------- canonical attack path (read-only)
+
+export type EvidenceClass = "OBSERVED" | "CORRELATED" | "INFERRED" | string;
+
+export interface AttackPathEvent {
+  event_id: string;
+  timestamp: string;
+  source_type: string | null;
+  host: string | null;
+  user: string | null;
+  source_ip: string | null;
+  destination_ip: string | null;
+  action: string | null;
+  process: string | null;
+  resource: string[];
+  status: string | null;
+  message: string;
+  ground_truth: { attack_related: boolean; attack_stage: string | null; critical: boolean };
+  selected: boolean;
+}
+
+export interface AttackPathStage {
+  stage: string;
+  ground_truth_stage: string;
+  in_original_diagram: boolean;
+  evidence_type: EvidenceClass;
+  justification: string;
+  event_range: string;
+  first_seen: string | null;
+  last_seen: string | null;
+  attack_events: number;
+  selected: number;
+  missed: number;
+  observables: Record<string, string[]>;
+  events: AttackPathEvent[];
+}
+
+export interface AttackPath {
+  metrics: {
+    total_events: number; attack_events: number; background_events: number; selected: number;
+    TP: number; FP: number; FN: number; precision: number; recall: number; f1: number;
+    critical_evidence_recall: number; critical_retained: number; critical_total: number;
+  };
+  ground_truth: string;
+  engine_config: string;
+  stages: AttackPathStage[];
+  transitions: { from: string; to: string; shared_observed_entities: string[]; time_ordered: boolean; evidence_type: EvidenceClass }[];
+  bridge_links: Record<string, string[]>;
+}

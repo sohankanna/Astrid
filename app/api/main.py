@@ -193,6 +193,11 @@ def create_app(service: SocService | None = None) -> FastAPI:
         """Canonical 50K scenario: raw vs SIEM vs our engine (measured)."""
         return soc.canonical_benchmark(refresh)
 
+    @app.get("/api/canonical/attack-path")
+    def canonical_attack_path() -> dict[str, Any]:
+        """Read-only: audited canonical attack path with evaluation status."""
+        return soc.canonical_attack_path()
+
     # -- correlation engine (debug inspection only) ------------------------------
 
     @app.get("/api/correlation/debug")

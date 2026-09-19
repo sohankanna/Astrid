@@ -195,6 +195,27 @@ class TestCanonicalEndpoint(unittest.TestCase):
         self.assertEqual(data["representations"]["raw"]["events"], 50_000)
         self.assertEqual(data["ground_truth_available"], canonical.ground_truth_available())
 
+    @unittest.skipUnless((canonical.DATASET_DIR / "attack_chain_audit.json").is_file(), "audit not present")
+    def test_attack_path_endpoint(self) -> None:
+        from fastapi.testclient import TestClient
+
+        from app.api.main import create_app
+        from app.api.service import SocService
+        from app.soc_core.efficiency import BenchmarkRunner
+
+        client = TestClient(create_app(SocService(efficiency=BenchmarkRunner(cache_file=None))))
+        data = client.get("/api/canonical/attack-path").json()
+        stages = data["stages"]
+        self.assertEqual(len({s["ground_truth_stage"] for s in stages}), 12)
+        self.assertEqual(sum(s["missed"] for s in stages), data["metrics"]["FN"])
+        self.assertEqual(sum(s["selected"] for s in stages), data["metrics"]["TP"])
+        for stage in stages:
+            self.assertEqual(stage["selected"] + stage["missed"], stage["attack_events"])
+            self.assertEqual(sum(e["selected"] for e in stage["events"]), stage["selected"])
+            self.assertTrue(all(e["ground_truth"]["attack_related"] for e in stage["events"]))
+        foothold = next(s for s in stages if s["ground_truth_stage"] == "WEB01_FOOTHOLD")
+        self.assertEqual(foothold["selected"], 0, "a missed stage must never be reported as retained")
+
 
 if __name__ == "__main__":
     unittest.main()

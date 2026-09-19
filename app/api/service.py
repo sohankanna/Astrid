@@ -320,6 +320,7 @@ class SocService:
         self.efficiency = efficiency or BenchmarkRunner()
         self._fidelity: dict[str, Any] | None = None
         self._canonical: dict[str, Any] | None = None
+        self._attack_path: dict[str, Any] | None = None
         self.catalog = build_catalog()
         self.provider_config = configured_provider()
         if analyst is not None:
@@ -699,6 +700,80 @@ class SocService:
                 self._canonical = result
             return self._canonical
 
+    def canonical_attack_path(self) -> dict[str, Any]:
+        """Read-only view model for the canonical attack path: the existing
+        attack-chain audit + the existing evaluation + per-event fields of the
+        audited stage events. Nothing is recomputed or re-labelled here."""
+        with self._lock:
+            if self._attack_path is not None:
+                return self._attack_path
+        audit_file = canonical.DATASET_DIR / "attack_chain_audit.json"
+        if not audit_file.is_file() or not canonical.GROUND_TRUTH_FILE.is_file():
+            raise NotFoundError("canonical attack-chain audit or ground truth not available")
+        audit = json.loads(audit_file.read_text(encoding="utf-8"))
+        bench = self.canonical_benchmark()
+        evaluation = (bench.get("evaluation") or {}).get("raw")
+        if not evaluation or "missed_by_stage" not in evaluation:
+            raise ConflictError("canonical evaluation not available; re-measure the canonical benchmark")
+        missed = {i for ids in evaluation["missed_by_stage"].values() for i in ids}
+
+        rows = audit["stages"] + audit["stages_not_in_diagram"]
+        wanted = {i for row in rows for i in _expand_ids(row["event_ids"])}
+        labels: dict[str, dict[str, Any]] = {}
+        with canonical.GROUND_TRUTH_FILE.open(encoding="utf-8") as handle:
+            for line in handle:
+                label = json.loads(line)
+                if label["event_id"] in wanted:
+                    labels[label["event_id"]] = label
+        events = {e["event_id"]: e for e in canonical.load("raw") if e["event_id"] in wanted}
+
+        stages = []
+        for row in rows:
+            ids = _expand_ids(row["event_ids"])
+            selected = [i for i in ids if labels[i]["attack_related"] and i not in missed]
+            if len(selected) != row["selected_raw"]:
+                # The audit and the evaluation come from the same default engine run;
+                # disagreement means a stale artifact. Refuse rather than show wrong data.
+                raise ConflictError(f"attack-path artifacts disagree for {row['stage']}; re-run the audit")
+            stages.append({
+                "stage": row["stage"], "ground_truth_stage": row["ground_truth_stage"],
+                "in_original_diagram": row in audit["stages"],
+                "evidence_type": row["evidence_type"], "justification": row["justification"],
+                "event_range": row["event_ids"], "first_seen": row["first_seen"], "last_seen": row["last_seen"],
+                "attack_events": sum(labels[i]["attack_related"] for i in ids),
+                "selected": len(selected), "missed": len(ids) - len(selected),
+                "observables": row["observables"],
+                "events": [{
+                    "event_id": i, "timestamp": events[i]["timestamp"], "source_type": events[i]["event_type"],
+                    "host": events[i]["host"], "user": events[i]["username"], "source_ip": events[i]["source_ip"],
+                    "destination_ip": events[i]["destination_ip"], "action": events[i]["action"],
+                    "process": events[i]["process_name"], "resource": events[i]["resource"],
+                    "status": events[i]["status"], "message": _preview((events[i]["message"] or "")[21:]),
+                    "ground_truth": {"attack_related": labels[i]["attack_related"],
+                                     "attack_stage": labels[i]["attack_stage"], "critical": labels[i]["critical"]},
+                    "selected": i in selected,
+                } for i in ids],
+            })
+        ev = evaluation
+        result = {
+            "metrics": {
+                "total_events": ev["events"], "attack_events": ev["TP"] + ev["FN"],
+                "background_events": ev["events"] - ev["TP"] - ev["FN"], "selected": ev["selected"],
+                "TP": ev["TP"], "FP": ev["FP"], "FN": ev["FN"], "precision": ev["precision"], "recall": ev["recall"],
+                "f1": ev["f1"], "critical_evidence_recall": ev["critical_evidence_recall"],
+                "critical_retained": ev["critical_retained"], "critical_total": ev["critical_total"],
+            },
+            "ground_truth": bench.get("ground_truth"),
+            "engine_config": ev.get("engine_config"),
+            "stages": stages,
+            "transitions": audit["transitions"],
+            "bridge_links": audit["bridge_links_via_s5_s6"],
+            "verdict": audit["verdict"],
+        }
+        with self._lock:
+            self._attack_path = result
+        return result
+
     # -- correlation engine (Stage 3.5, debug only) ---------------------------
 
     def correlation_debug(self, limit: int = 25) -> dict[str, Any]:
@@ -1060,6 +1135,22 @@ def _run_analyst(analyst: Any, incident: Incident, context: EvidenceContext) -> 
     if isinstance(analyst, AIAnalyst):
         return analyst.analyze(incident, context)
     return analyst.analyze(incident)
+
+
+def _expand_ids(ranges: str | None) -> list[str]:
+    """"EVT-000001..000014, EVT-000042" -> individual IDs (audit notation)."""
+    out: list[str] = []
+    for part in (ranges or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        prefix, _, number = part.rpartition("-")
+        if ".." in number:
+            lo, hi = number.split("..")
+            out.extend(f"{prefix}-{n:0{len(lo)}d}" for n in range(int(lo), int(hi) + 1))
+        else:
+            out.append(part)
+    return out
 
 
 def _preview(value: str) -> str:

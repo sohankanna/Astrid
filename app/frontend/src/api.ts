@@ -6,6 +6,7 @@
 import type {
   AlertView,
   AnalyzeResult,
+  AttackPath,
   BenchmarkStatus,
   CanonicalResult,
   CostComparison,
@@ -117,6 +118,7 @@ export const api = {
   cost: (body: CostRequest) =>
     request<CostComparison>("/api/efficiency/cost", { method: "POST", body: JSON.stringify(body) }),
   live: () => request<LiveUsage>("/api/efficiency/live"),
+  attackPath: () => request<AttackPath>("/api/canonical/attack-path"),
   canonical: (refresh = false) =>
     request<CanonicalResult>(`/api/efficiency/canonical${refresh ? "?refresh=true" : ""}`),
 };
