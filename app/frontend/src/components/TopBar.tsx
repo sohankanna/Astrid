@@ -4,6 +4,8 @@ import type { Health } from "../types";
 interface Props {
   health: Health | null;
   backendDown: boolean;
+  view: "console" | "lab";
+  onView: (view: "console" | "lab") => void;
 }
 
 function Indicator({ ok, label }: { ok: boolean; label: string }) {
@@ -15,7 +17,7 @@ function Indicator({ ok, label }: { ok: boolean; label: string }) {
   );
 }
 
-export function TopBar({ health, backendDown }: Props) {
+export function TopBar({ health, backendDown, view, onView }: Props) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -30,6 +32,10 @@ export function TopBar({ health, backendDown }: Props) {
         <span className="brand-name">AI SOC COMMAND CENTER</span>
         <span className="env-tag">{health?.environment ?? "LOCAL / OFFLINE LAB"}</span>
       </div>
+      <nav className="views">
+        <button className={view === "console" ? "active" : ""} onClick={() => onView("console")}>SOC CONSOLE</button>
+        <button className={view === "lab" ? "active" : ""} onClick={() => onView("lab")}>AI EFFICIENCY LAB</button>
+      </nav>
       <div className="indicators">
         <Indicator ok={up && !!health?.soc_online} label={up ? "SOC ONLINE" : "SOC OFFLINE"} />
         <Indicator ok={up && !!health?.siem.connected} label={up ? "SIEM CONNECTED" : "SIEM UNREACHABLE"} />

@@ -102,7 +102,7 @@ JSON. It's conservative for identifier-dense JSON; expect about ±20% against a 
 tokenizer. Reported as `estimated_tokens`, `estimated_output_tokens` (a planning
 estimate of 2,500) and `estimated_total_tokens`. When Claude is actually called,
 the **measured** `input_tokens` / `output_tokens` from the API response are
-shown alongside. No pricing is computed.
+shown alongside. Cost modelling lives in the AI Efficiency Lab (`docs/AI_EFFICIENCY_LAB.md`).
 
 ## 5. AI providers
 

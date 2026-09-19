@@ -6,6 +6,11 @@
 import type {
   AlertView,
   AnalyzeResult,
+  BenchmarkStatus,
+  CostComparison,
+  CostRequest,
+  Fidelity,
+  LiveUsage,
   ContextPack,
   EventView,
   Health,
@@ -29,6 +34,7 @@ export class ApiError extends Error {
 const INCIDENT_ID = /^inc-\d{4}$/;
 const SCENARIO_ID = /^[a-z0-9-]{1,40}$/;
 const ACTION_ID = /^act-\d{2,3}$/;
+export const BENCHMARK_SCALES = [100, 1_000, 10_000, 50_000, 100_000, 1_000_000] as const;
 
 function checked(value: string, pattern: RegExp, kind: string): string {
   if (!pattern.test(value)) throw new ApiError(`Invalid ${kind} identifier.`, 400);
@@ -96,4 +102,18 @@ export const api = {
         body: JSON.stringify({ action_id: checked(actionId, ACTION_ID, "action"), decision, reason }),
       },
     ),
+  efficiencyStatus: () => request<BenchmarkStatus>("/api/efficiency/benchmark"),
+  runBenchmark: (scales: number[], force = false) => {
+    if (!scales.length || scales.some((s) => !(BENCHMARK_SCALES as readonly number[]).includes(s))) {
+      throw new ApiError("Invalid benchmark scale.", 400);
+    }
+    return request<BenchmarkStatus>("/api/efficiency/benchmark", {
+      method: "POST",
+      body: JSON.stringify({ scales, force }),
+    });
+  },
+  fidelity: () => request<Fidelity>("/api/efficiency/fidelity"),
+  cost: (body: CostRequest) =>
+    request<CostComparison>("/api/efficiency/cost", { method: "POST", body: JSON.stringify(body) }),
+  live: () => request<LiveUsage>("/api/efficiency/live"),
 };

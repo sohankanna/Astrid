@@ -87,6 +87,9 @@ def _replace_secret(kind: str, match: re.Match[str]) -> str:
 _AWS_KEY_ID: Final[re.Pattern[str]] = re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")
 _EMAIL: Final[re.Pattern[str]] = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 _ACCOUNT_IN_ARN: Final[re.Pattern[str]] = re.compile(r"(?<=arn:aws:)([a-z0-9-]*):([a-z0-9-]*):(\d{12})")
+# Identifier-shaped tokens in free text (usernames, account IDs, key IDs).
+_TOKEN: Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9._@-]+")
+_SEPARATOR: Final[re.Pattern[str]] = re.compile(r"([-._@])")
 
 
 @dataclass
@@ -99,6 +102,7 @@ class Redactor:
     redacted_count: int = 0
     pseudonymized_count: int = 0
     kinds: dict[str, int] = field(default_factory=dict)
+    _lookup: dict[str, str] = field(default_factory=dict, repr=False)
 
     # -- identifiers ------------------------------------------------------
 
@@ -110,6 +114,8 @@ class Redactor:
         if value not in table:
             table[value] = f"{kind}_{len(table) + 1:03d}"
             self.reverse[table[value]] = value
+            if len(value) >= 3:  # very short values would mangle unrelated text
+                self._lookup[value] = table[value]
         self.pseudonymized_count += 1
         return table[value]
 
@@ -132,25 +138,46 @@ class Redactor:
         out = _ACCOUNT_IN_ARN.sub(
             lambda m: f"{m.group(1)}:{m.group(2)}:{self.pseudonym('AWS_ACCOUNT', m.group(3))}", out
         )
-        for real, token in self._known_values():
-            # Any value already pseudonymized in a structured field must not
-            # survive in free text: a username inside "C:\\Users\\<name>\\...",
-            # an account ID inside an incident title, a key ID in a command.
-            if real in out:
-                out = out.replace(real, token)
-                self.pseudonymized_count += 1
-        return out
+        # Any value already pseudonymized in a structured field must not
+        # survive in free text: a username inside "C:\\Users\\<name>\\...", an
+        # account ID inside an incident title, a key ID in a command line.
+        # Token lookup keeps this O(len(text)) however many pseudonyms exist
+        # (a spray over 100K accounts must not make every text field slow).
+        return _TOKEN.sub(self._swap_token, out)
 
-    def _known_values(self) -> list[tuple[str, str]]:
-        # Longest first so "svc_backup" is replaced before "svc". Very short
-        # values are skipped to avoid mangling unrelated text.
-        pairs = [
-            (real, token)
-            for table in self.pseudonyms.values()
-            for real, token in table.items()
-            if real and len(real) >= 3
-        ]
-        return sorted(pairs, key=lambda kv: -len(kv[0]))
+    def _swap_token(self, match: re.Match[str]) -> str:
+        text = match.group(0)
+        whole = self._lookup.get(text)
+        if whole is not None:
+            self.pseudonymized_count += 1
+            return whole
+        # A known value can sit inside a longer token on separator boundaries,
+        # e.g. "ci-deploy" inside the session name "ci-deploy-session". Check
+        # separator-aligned sub-spans (longest first). Cost is O(k^2) in the
+        # handful of segments, independent of how many pseudonyms exist.
+        parts = _SEPARATOR.split(text)          # [word, sep, word, sep, ...]
+        words, seps = parts[0::2], parts[1::2]
+        if len(words) < 2:
+            return text
+        out: list[str] = []
+        start = 0
+        while start < len(words):
+            for end in range(len(words), start, -1):
+                candidate = "".join(
+                    words[i] + (seps[i] if i < end - 1 else "") for i in range(start, end)
+                )
+                token = self._lookup.get(candidate)
+                if token is not None:
+                    self.pseudonymized_count += 1
+                    out.append(token)
+                    break
+            else:
+                end = start + 1
+                out.append(words[start])
+            if end - 1 < len(seps):
+                out.append(seps[end - 1])
+            start = end
+        return "".join(out)
 
     def _count(self, kind: str, n: int = 1) -> None:
         self.redacted_count += n

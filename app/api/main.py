@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..soc_core.efficiency import SCALES, Pricing
 from .service import (
     MAX_REASON_LENGTH,
     ConflictError,
@@ -46,6 +47,30 @@ class DecisionRequest(BaseModel):
     action_id: str = Field(pattern=r"^act-\d{2,3}$")
     decision: Literal["approve", "reject"]
     reason: str | None = Field(default=None, max_length=MAX_REASON_LENGTH)
+
+
+class BenchmarkRequest(BaseModel):
+    """Which synthetic scales to measure. Only values from SCALES are accepted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scales: list[int] = Field(min_length=1, max_length=len(SCALES))
+    force: bool = False
+
+
+class CostRequest(BaseModel):
+    """User-supplied pricing. Nothing here is a vendor price; the client
+    decides the rates and the model label."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scale: int
+    model: str = Field(default="example-model", min_length=1, max_length=64, pattern=r"^[A-Za-z0-9 ._:/()-]+$")
+    input_per_mtok: float = Field(ge=0, le=10_000)
+    output_per_mtok: float = Field(ge=0, le=10_000)
+    investigations: int = Field(default=1, ge=0, le=100_000_000)
+    output_tokens: int = Field(default=2500, ge=0, le=1_000_000)
+    context_window: int | None = Field(default=None, ge=1_000, le=100_000_000)
 
 
 def create_app(service: SocService | None = None) -> FastAPI:
@@ -137,6 +162,37 @@ def create_app(service: SocService | None = None) -> FastAPI:
     @app.get("/api/scenarios")
     def scenarios() -> list[dict[str, Any]]:
         return soc.list_scenarios()
+
+    # -- AI efficiency lab (local benchmark; never calls a model) -------------
+
+    @app.get("/api/efficiency/benchmark")
+    def efficiency_status() -> dict[str, Any]:
+        return soc.efficiency_status()
+
+    @app.post("/api/efficiency/benchmark")
+    def efficiency_run(body: BenchmarkRequest) -> dict[str, Any]:
+        return soc.efficiency_run(body.scales, body.force)
+
+    @app.get("/api/efficiency/fidelity")
+    def efficiency_fidelity() -> dict[str, Any]:
+        return soc.efficiency_fidelity()
+
+    @app.post("/api/efficiency/cost")
+    def efficiency_cost(body: CostRequest) -> dict[str, Any]:
+        pricing = Pricing(model=body.model, input_per_mtok=body.input_per_mtok,
+                          output_per_mtok=body.output_per_mtok)
+        return soc.efficiency_cost(body.scale, pricing, body.investigations,
+                                   body.output_tokens, body.context_window)
+
+    @app.get("/api/efficiency/live")
+    def efficiency_live() -> dict[str, Any]:
+        return soc.efficiency_live()
+
+    # -- correlation engine (debug inspection only) ------------------------------
+
+    @app.get("/api/correlation/debug")
+    def correlation_debug(limit: int = Query(default=25, ge=1, le=200)) -> dict[str, Any]:
+        return soc.correlation_debug(limit)
 
     # -- actions -------------------------------------------------------------
 

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,7 +43,16 @@ from ..soc_core.detections import (
 )
 from ..soc_core.events import SecurityEvent, load_events
 from ..soc_core.mitre import TECHNIQUES
-from ..soc_core.evidence_context import EvidenceContext, build_evidence_context
+from ..soc_core.correlation_engine import CorrelationEngine as EvidenceCorrelationEngine
+from ..soc_core.efficiency import (
+    BASELINE_LABEL,
+    BenchmarkRunner,
+    Pricing,
+    budget_experiment,
+    canonical_fidelity,
+    compare_costs,
+)
+from ..soc_core.evidence_context import ESTIMATED_OUTPUT_TOKENS, EvidenceContext, build_evidence_context
 from ..soc_core.providers.ai_analyst import (
     AIAnalysis,
     AIAnalyst,
@@ -291,8 +301,11 @@ class SocService:
         default_scenario: str | None = DEFAULT_SCENARIO,
         analyst: AIAnalyst | None = None,
         fallback_analyst: AIAnalyst | None = None,
+        efficiency: BenchmarkRunner | None = None,
     ) -> None:
         self._lock = threading.RLock()
+        self.efficiency = efficiency or BenchmarkRunner()
+        self._fidelity: dict[str, Any] | None = None
         self.catalog = build_catalog()
         self.provider_config = configured_provider()
         if analyst is not None:
@@ -525,9 +538,11 @@ class SocService:
             "fallback_reason": None,
             "live_model": False,
         }
+        started = time.perf_counter()
         try:
             analysis = _run_analyst(self.analyst, incident, context)
             run["live_model"] = name != "mock"
+            run["latency_ms"] = round((time.perf_counter() - started) * 1000)
         except Exception as exc:  # provider failure must not crash the console
             reason = str(exc) if isinstance(exc, AIProviderError) else "AI analyst failed"
             logger.warning("AI analyst %s failed for %s: %s", name, incident_id, reason)
@@ -568,6 +583,84 @@ class SocService:
             "provider": run,
             "investigation": analysis.to_dict(),
             "context_metrics": context.metrics,
+        }
+
+    # -- AI efficiency lab ----------------------------------------------------
+
+    def efficiency_status(self) -> dict[str, Any]:
+        return self.efficiency.status()
+
+    def efficiency_run(self, scales: list[int], force: bool = False) -> dict[str, Any]:
+        """Queue benchmark scales; they run in a background thread."""
+        logger.info("efficiency benchmark requested: scales=%s force=%s", scales, force)
+        return self.efficiency.request(scales, force=force)
+
+    def efficiency_fidelity(self) -> dict[str, Any]:
+        """Evidence retention + budget experiment on the canonical incidents
+        (deterministic, computed once)."""
+        with self._lock:
+            if self._fidelity is None:
+                self._fidelity = {"retention": canonical_fidelity(), "budget": budget_experiment()}
+            return self._fidelity
+
+    def efficiency_cost(
+        self,
+        scale: int,
+        pricing: Pricing,
+        investigations: int,
+        output_tokens: int = ESTIMATED_OUTPUT_TOKENS,
+        context_window: int | None = None,
+    ) -> dict[str, Any]:
+        """Path A (raw baseline, theoretical) vs Path B (evidence context)
+        for a MEASURED scale. Refuses scales that have not been measured."""
+        result = self.efficiency.results.get(scale)
+        if result is None:
+            raise ConflictError(f"Scale {scale:,} has not been measured yet. Run the benchmark first.")
+        comparison = compare_costs(
+            result["estimated_raw_context_tokens"], result["estimated_context_tokens"], pricing,
+            output_tokens=output_tokens, investigations=investigations, context_window=context_window,
+        )
+        return {"scale": scale, "baseline_label": BASELINE_LABEL, **comparison}
+
+    def efficiency_live(self) -> dict[str, Any]:
+        """Measured usage from real model calls made by the normal analyze
+        path (EvidenceContext only). There is no separate live benchmark
+        pipeline, and nothing here triggers a model call."""
+        with self._lock:
+            runs = [
+                {"incident_id": incident_id, "model": run.get("model"), "latency_ms": run.get("latency_ms"),
+                 "input_tokens": (run.get("usage") or {}).get("input_tokens"),
+                 "output_tokens": (run.get("usage") or {}).get("output_tokens"),
+                 "served_by": (run.get("usage") or {}).get("served_by"),
+                 "estimated_input_tokens": self._context(incident_id).metrics["estimated_tokens"]}
+                for incident_id, run in self.state.ai_runs.items()
+                if run.get("live_model") and run.get("usage")
+            ]
+        configured = self.provider_config.to_dict()
+        return {
+            "available": bool(runs),
+            "message": None if runs else "Live model usage unavailable — benchmark running offline.",
+            "provider": configured,
+            "runs": runs,
+        }
+
+    # -- correlation engine (Stage 3.5, debug only) ---------------------------
+
+    def correlation_debug(self, limit: int = 25) -> dict[str, Any]:
+        """Run the generic correlation engine over the current scenario's
+        events + alerts. Read-only inspection: nothing downstream consumes it
+        yet, no model is called, and only IDs/scores are returned (no raw
+        event text)."""
+        with self._lock:
+            events, alerts = list(self.state.events), list(self.state.alerts)
+            scenario = self.state.spec.scenario_id
+        result = EvidenceCorrelationEngine().run(events, alerts)
+        return {
+            "scenario": scenario,
+            "summary": result.summary(),
+            "normalization": result.report.to_dict(),
+            "entities": result.index.stats(),
+            "candidates": [c.to_dict() for c in result.candidates(limit)],
         }
 
     def response_plan(self, incident_id: str) -> dict[str, Any]:

@@ -6,6 +6,7 @@ import { MetricsBar } from "./components/MetricsBar";
 import { ScenarioBar } from "./components/ScenarioBar";
 import { IncidentList } from "./components/IncidentList";
 import { Investigation } from "./components/Investigation";
+import { EfficiencyLab } from "./components/EfficiencyLab";
 import { incidentLabel } from "./format";
 
 interface Toast {
@@ -18,7 +19,14 @@ function message(error: unknown): string {
   return error instanceof ApiError ? error.message : "Unexpected console error.";
 }
 
+type View = "console" | "lab";
+
+function viewFromHash(): View {
+  return window.location.hash === "#lab" ? "lab" : "console";
+}
+
 export default function App() {
+  const [view, setView] = useState<View>(viewFromHash);
   const [health, setHealth] = useState<Health | null>(null);
   const [backendDown, setBackendDown] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -95,6 +103,17 @@ export default function App() {
   useEffect(() => {
     void boot();
   }, [boot]);
+
+  useEffect(() => {
+    const onHash = () => setView(viewFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  const switchView = (next: View) => {
+    window.location.hash = next === "lab" ? "lab" : "";
+    setView(next);
+  };
 
   // Health heartbeat: indicators go red if the backend disappears, and the
   // console reloads itself when it comes back.
@@ -182,7 +201,7 @@ export default function App() {
   if (backendDown && !metrics) {
     return (
       <div className="app">
-        <TopBar health={null} backendDown />
+        <TopBar health={null} backendDown view={view} onView={switchView} />
         <div className="offline">
           <div className="offline-card">
             <strong>SOC API UNREACHABLE</strong>
@@ -200,12 +219,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar health={health} backendDown={backendDown} />
+      <TopBar health={health} backendDown={backendDown} view={view} onView={switchView} />
       {backendDown && (
         <div className="banner error">
           ⚠ Connection to the SOC API lost. Showing the last known state; reconnecting automatically.
         </div>
       )}
+      {view === "lab" ? (
+        <EfficiencyLab />
+      ) : (
+        <>
       <MetricsBar metrics={metrics} />
       <ScenarioBar scenarios={scenarios} metrics={metrics} running={busy === "scenario"} onRun={runScenario} />
 
@@ -252,6 +275,8 @@ export default function App() {
           onDecide={decide}
         />
       </main>
+        </>
+      )}
 
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (

@@ -21,3 +21,6 @@ data/*
 
 # frontend build output
 dist/
+
+# local benchmark cache (deterministic, regenerable)
+.cache/

@@ -270,3 +270,133 @@ export interface IncidentDetail {
   manual_tasks: ManualTask[];
   ai_context: { metrics: ContextMetrics; last_run: AiRun | null; configured_provider: string };
 }
+
+// ---------------------------------------------------------------- AI efficiency lab
+
+export type ScaleState = "measured" | "running" | "queued" | "unavailable" | "not_run";
+
+export interface BenchmarkResult {
+  scale: number;
+  seed: number;
+  telemetry: string;
+  baseline_label: string;
+  raw_event_count: number;
+  incidents_detected: number;
+  relevant_event_count: number;
+  evidence_object_count: number;
+  excluded_event_count: number;
+  redaction_count: number;
+  pseudonym_count: number;
+  estimated_context_tokens: number;
+  estimated_raw_context_tokens: number;
+  context_reduction_percent: number | null;
+  evidence_retention_percent: number | null;
+  citation_coverage_percent: number | null;
+  preserved_facts: number;
+  critical_facts: number;
+  missing_facts: string[];
+  context_build_time_ms: number;
+  detection_time_ms: number;
+  correlation_time_ms: number;
+  generation_time_ms: number;
+  events_per_second: number | null;
+  events_per_second_definition: string;
+  measured_at: string;
+}
+
+export interface BenchmarkStatus {
+  seed: number;
+  benchmark_version: string;
+  telemetry: string;
+  busy: boolean;
+  scales: { scale: number; state: ScaleState; reason: string | null }[];
+  results: BenchmarkResult[];
+}
+
+export interface FactResult {
+  fact_id: string;
+  fact: string;
+  incident: string;
+  via_context: boolean;
+  preserved: boolean;
+  supporting_event_ids: string[];
+  missing_event_ids: string[];
+  evidence_ids: string[];
+}
+
+export interface RetentionResult {
+  critical_facts: number;
+  preserved_facts: number;
+  missing_facts: string[];
+  evidence_retention_percent: number | null;
+  citation_coverage_percent: number | null;
+  facts: FactResult[];
+}
+
+export interface BudgetRow {
+  budget_percent: number;
+  target_tokens: number;
+  actual_tokens: number;
+  hit_floor: boolean;
+  evidence_objects: number;
+  dropped_by_budget: number;
+  preserved_facts: number;
+  critical_facts: number;
+  evidence_retention_percent: number | null;
+  citation_coverage_percent: number | null;
+  missing_facts: string[];
+}
+
+export interface Fidelity {
+  retention: RetentionResult;
+  budget: { full_context_tokens: number; note: string; rows: BudgetRow[] };
+}
+
+export interface PathCost {
+  label: string;
+  input_tokens: number;
+  input_cost: number;
+  output_cost: number;
+  total_cost: number;
+  total_for_investigations: number;
+  exceeds_context_window?: boolean;
+  context_windows_needed?: number;
+}
+
+export interface CostComparison {
+  scale: number;
+  baseline_label: string;
+  pricing: { model: string; input_per_mtok: number; output_per_mtok: number; label: string };
+  output_tokens_assumed: number;
+  investigations: number;
+  baseline: PathCost;
+  evidence: PathCost;
+  savings_for_investigations: number;
+  token_reduction_percent: number | null;
+  cost_reduction_percent: number | null;
+  per_1000_investigations: { baseline: number; evidence: number };
+  per_10000_investigations: { baseline: number; evidence: number };
+}
+
+export interface CostRequest {
+  scale: number;
+  model: string;
+  input_per_mtok: number;
+  output_per_mtok: number;
+  investigations: number;
+  context_window?: number | null;
+}
+
+export interface LiveUsage {
+  available: boolean;
+  message: string | null;
+  runs: {
+    incident_id: string;
+    model: string | null;
+    served_by: string | null;
+    latency_ms: number | null;
+    input_tokens: number | null;
+    output_tokens: number | null;
+    estimated_input_tokens: number;
+  }[];
+}
