@@ -1,0 +1,32 @@
+title: MFA Fatigue / Push Bombing
+id: 8f2b41c0-1111-4a00-9000-50c0ffee0002
+status: experimental
+description: >
+  Detects a single account denying repeated multi-factor prompts in a short
+  window. The attacker already holds valid credentials and is spamming push
+  notifications hoping the user approves one out of annoyance.
+  Grouping is by user, not source address: the prompts land on the user's
+  device regardless of where the attacker is connecting from.
+references:
+  - https://attack.mitre.org/techniques/T1621/
+author: Hackathon SOC team (synthetic)
+date: 2026/09/18
+logsource:
+  product: okta
+  service: system
+detection:
+  selection:
+    eventType:
+      - 'user.mfa.factor.deny'
+      - 'user.authentication.auth_via_mfa'
+    outcome.result: 'FAILURE'
+  timeframe: 10m
+  condition: selection | count() by actor.alternateId >= 3
+falsepositives:
+  - A user repeatedly dismissing a prompt from their own stale session
+  - Broken MFA enrollment on a newly provisioned device
+level: high
+tags:
+  - attack.credential_access
+  - attack.t1621
+internal_rule_id: SOC-AUTH-002

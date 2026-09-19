@@ -1,0 +1,144 @@
+%% AI-assisted SOC -- reference architecture of the offline simulation.
+%% Render: GitHub/VS Code Markdown preview, mermaid.live, or `mmdc -i ARCHITECTURE.mmd`.
+%%
+%% Legend
+%%   solid box, green     = implemented and tested today
+%%   dashed box, grey     = interface placeholder (raises NotImplementedError)
+%%   thick red edge       = trust boundary crossing (TB-n)
+%%   orange subgraph      = human approval boundary
+%%
+%% Evidence path (left spine) is authoritative. The AI is advisory: remove it
+%% and the incident, alerts, timeline and risk score are unchanged.
+
+flowchart TB
+
+    %% ---------------------------------------------------------------- sources
+    subgraph ZONE_UNTRUSTED["UNTRUSTED ZONE -- attacker-influenced telemetry"]
+        direction LR
+        SRC_EDR["EDR / Sysmon<br/>process, alert"]
+        SRC_IDP["Identity provider<br/>auth, MFA"]
+        SRC_NET["DNS / Zeek / firewall<br/>dns, network"]
+        SRC_CLOUD["Cloud audit logs<br/>API activity"]
+        SRC_SYNTH["data/sample_security_events.json<br/>26 synthetic events"]
+    end
+
+    %% ------------------------------------------------------------ SIEM layer
+    subgraph SIEM_LAYER["SIEM / EVENT INGESTION -- SIEMProvider interface (interchangeable)"]
+        direction LR
+        SIEM_MOCK["MockSIEMProvider<br/>IMPLEMENTED"]
+        SIEM_SPLUNK["SplunkProvider<br/>placeholder"]
+        SIEM_WAZUH["WazuhProvider<br/>placeholder"]
+    end
+
+    INGEST["EventQuery<br/>structured filters, bounded limit"]
+
+    %% ----------------------------------------------------------- trusted core
+    subgraph ZONE_CORE["TRUSTED CORE -- deterministic, no AI in this path"]
+        direction TB
+        NORM["Normalization + validation<br/>events.py parse_event<br/>enums, tz-aware time, fail loud"]
+        SCREEN["Untrusted-content screening<br/>screen_for_injection<br/>flag, never strip"]
+        DETECT["Deterministic detection<br/>detections.py -- 8 rules<br/>signature, threshold, entropy"]
+        CORR["Alert correlation<br/>correlation.py<br/>shared entity + time window"]
+        RISK["Risk scoring<br/>risk.py<br/>score = sum of named factors"]
+        MITRE["Pinned ATT&CK catalog<br/>mitre.py<br/>closed vocabulary"]
+    end
+
+    %% ------------------------------------------------------------- AI layer
+    subgraph AI_LAYER["AI SOC ANALYST -- AIAnalyst interface (interchangeable, ADVISORY)"]
+        direction LR
+        AI_MOCK["MockAIAnalyst<br/>IMPLEMENTED"]
+        AI_OLLAMA["OllamaAnalyst<br/>placeholder, local"]
+        AI_HOSTED["HostedLLMAnalyst<br/>placeholder, remote"]
+    end
+
+    VALIDATE["validate_analysis<br/>enforced in AIAnalyst base class<br/>citations, ATT&CK IDs, no action claims"]
+    MAPPER["requests_from_analysis<br/>prose to closed ResponseAction enum<br/>unmappable text dropped"]
+
+    %% ------------------------------------------------------ human boundary
+    subgraph HUMAN["HUMAN APPROVAL BOUNDARY -- nothing disruptive crosses without a person"]
+        direction TB
+        REVIEW["Analyst review<br/>evidence first, AI draft second"]
+        APPROVE{"Tier T2 or T3?<br/>approved_by set by a human"}
+    end
+
+    %% -------------------------------------------------------- response layer
+    subgraph RESP_LAYER["RESPONSE AUTOMATION -- ResponseProvider interface"]
+        direction TB
+        GATES["Policy gates in base class<br/>protected assets, target in evidence,<br/>tier approval, blast-radius cap"]
+        RESP_MOCK["MockResponseProvider<br/>IMPLEMENTED -- DRY RUN default"]
+        RESP_FUTURE["Future integrations<br/>EDR isolate, IdP disable,<br/>firewall block, ticketing"]
+    end
+
+    AUDIT[("Audit log<br/>every request incl. refusals")]
+
+    %% ================================================================ edges
+    SRC_EDR --> SIEM_SPLUNK
+    SRC_IDP --> SIEM_SPLUNK
+    SRC_NET --> SIEM_WAZUH
+    SRC_CLOUD --> SIEM_WAZUH
+    SRC_SYNTH --> SIEM_MOCK
+
+    SIEM_MOCK --> INGEST
+    SIEM_SPLUNK -.-> INGEST
+    SIEM_WAZUH -.-> INGEST
+
+    INGEST -- "TB-1 untrusted data enters" --> NORM
+
+    NORM --> SCREEN
+    NORM --> DETECT
+    DETECT -- "alerts cite event_ids" --> CORR
+    MITRE -. "validates technique IDs" .-> DETECT
+    CORR -- "Incident" --> RISK
+    CORR -- "Incident" --> AI_MOCK
+    CORR -.-> AI_OLLAMA
+    CORR -- "TB-3 data leaves boundary<br/>redaction required" --> AI_HOSTED
+    SCREEN -- "injection findings" --> AI_MOCK
+
+    AI_MOCK --> VALIDATE
+    AI_OLLAMA -.-> VALIDATE
+    AI_HOSTED -. "TB-3' model output is untrusted" .-> VALIDATE
+    MITRE -. "rejects hallucinated IDs" .-> VALIDATE
+
+    RISK --> REVIEW
+    VALIDATE -- "AIAnalysis, proposed_only" --> REVIEW
+    SCREEN -- "injection findings" --> REVIEW
+
+    VALIDATE --> MAPPER
+    MAPPER --> APPROVE
+    REVIEW -- "human decision" --> APPROVE
+
+    APPROVE -- "TB-5 decision to production" --> GATES
+    GATES -- "passed" --> RESP_MOCK
+    GATES -.-> RESP_FUTURE
+    GATES -- "refused" --> AUDIT
+    RESP_MOCK --> AUDIT
+    RESP_FUTURE -.-> AUDIT
+
+    %% =============================================================== styles
+    classDef implemented fill:#e6f4ea,stroke:#1e7e34,stroke-width:2px,color:#0b3d17
+    classDef placeholder fill:#f1f3f4,stroke:#80868b,stroke-width:1px,stroke-dasharray:5 4,color:#3c4043
+    classDef core fill:#e8f0fe,stroke:#1a56db,stroke-width:1px,color:#0b2a6b
+    classDef control fill:#fef7e0,stroke:#b06000,stroke-width:2px,color:#4a2800
+    classDef source fill:#fce8e6,stroke:#c5221f,stroke-width:1px,color:#5c0f0d
+    classDef store fill:#ffffff,stroke:#3c4043,stroke-width:1px,color:#202124
+
+    class SIEM_MOCK,AI_MOCK,RESP_MOCK implemented
+    class SIEM_SPLUNK,SIEM_WAZUH,AI_OLLAMA,AI_HOSTED,RESP_FUTURE placeholder
+    class NORM,SCREEN,DETECT,CORR,RISK,MITRE,INGEST core
+    class VALIDATE,MAPPER,GATES,APPROVE,REVIEW control
+    class SRC_EDR,SRC_IDP,SRC_NET,SRC_CLOUD,SRC_SYNTH source
+    class AUDIT store
+
+    style ZONE_UNTRUSTED fill:#fff5f5,stroke:#c5221f,stroke-width:2px,stroke-dasharray:6 4
+    style HUMAN fill:#fff8e1,stroke:#e37400,stroke-width:3px,stroke-dasharray:8 4
+    style ZONE_CORE fill:#f8faff,stroke:#1a56db,stroke-width:1px
+    style SIEM_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+    style AI_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+    style RESP_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+
+    %% Trust-boundary edges drawn in red. Indices count edge declarations above
+    %% in order, starting at 0: 8 = TB-1, 16 = TB-3, 20 = TB-3', 28 = TB-5.
+    linkStyle 8 stroke:#c5221f,stroke-width:3px
+    linkStyle 16 stroke:#c5221f,stroke-width:3px
+    linkStyle 20 stroke:#c5221f,stroke-width:3px
+    linkStyle 28 stroke:#c5221f,stroke-width:3px

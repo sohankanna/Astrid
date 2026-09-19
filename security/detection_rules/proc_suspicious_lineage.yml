@@ -1,0 +1,49 @@
+title: Office Application Spawning a Script Interpreter or Proxy Binary
+id: 8f2b41c0-1111-4a00-9000-50c0ffee0004
+status: experimental
+description: >
+  Detects Office applications spawning interpreters (powershell, cmd, wscript,
+  mshta) and PowerShell spawning signed-binary proxies (rundll32, regsvr32).
+  These parent-child pairs are rare in normal use and common after macro or
+  exploit execution.
+references:
+  - https://attack.mitre.org/techniques/T1204/002/
+  - https://attack.mitre.org/techniques/T1218/011/
+author: Hackathon SOC team (synthetic)
+date: 2026/09/18
+logsource:
+  category: process_creation
+  product: windows
+detection:
+  selection_office:
+    ParentImage|endswith:
+      - '\winword.exe'
+      - '\excel.exe'
+      - '\powerpnt.exe'
+      - '\outlook.exe'
+    Image|endswith:
+      - '\powershell.exe'
+      - '\cmd.exe'
+      - '\wscript.exe'
+      - '\mshta.exe'
+  selection_proxy:
+    ParentImage|endswith: '\powershell.exe'
+    Image|endswith:
+      - '\rundll32.exe'
+      - '\regsvr32.exe'
+      - '\mshta.exe'
+  condition: selection_office or selection_proxy
+fields:
+  - ParentImage
+  - Image
+  - CommandLine
+falsepositives:
+  - Document-automation workflows that legitimately invoke scripting engines
+  - Enterprise add-ins that shell out during installation
+level: high
+tags:
+  - attack.execution
+  - attack.t1204.002
+  - attack.defense_evasion
+  - attack.t1218.011
+internal_rule_id: SOC-EXEC-003

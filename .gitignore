@@ -1,0 +1,23 @@
+﻿.env
+.env.*
+!.env.example
+
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+node_modules/
+
+.DS_Store
+.vscode/
+
+*.log
+
+data/*
+!data/.gitkeep
+!data/sample_security_events.json
+!data/aws_cloudtrail_samples.json
+
+# frontend build output
+dist/

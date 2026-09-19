@@ -1,0 +1,41 @@
+title: Suspicious LSASS Memory Access
+id: 8f2b41c0-1111-4a00-9000-50c0ffee0005
+status: experimental
+description: >
+  Detects a process opening LSASS memory with read rights typical of
+  credential dumping. This rule deliberately fires even when the access was
+  blocked by an endpoint product: a blocked attempt still proves both intent
+  and an active foothold, and suppressing it would hide the single most
+  important event in an intrusion chain.
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+author: Hackathon SOC team (synthetic)
+date: 2026/09/18
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection:
+    TargetImage|endswith: '\lsass.exe'
+    GrantedAccess:
+      - '0x1010'
+      - '0x1410'
+      - '0x1438'
+      - '0x143a'
+  filter_known_good:
+    SourceImage|endswith:
+      - '\wmiprvse.exe'
+      - '\MsMpEng.exe'
+  condition: selection and not filter_known_good
+fields:
+  - SourceImage
+  - TargetImage
+  - GrantedAccess
+falsepositives:
+  - Endpoint protection and backup agents that legitimately inspect LSASS
+  - Crash-dump and diagnostic tooling
+level: critical
+tags:
+  - attack.credential_access
+  - attack.t1003.001
+internal_rule_id: SOC-CRED-001

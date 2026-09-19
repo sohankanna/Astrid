@@ -1,0 +1,162 @@
+%% Cloud SOC architecture -- AWS telemetry into the existing offline SOC core.
+%% Render: GitHub/VS Code Markdown preview, mermaid.live, or `mmdc -i CLOUD_SOC_ARCHITECTURE.mmd`.
+%% Companion to ARCHITECTURE.mmd (endpoint view). Same engine, same gates.
+%%
+%% Legend
+%%   green box            = implemented and tested today (offline, synthetic data)
+%%   dashed grey box      = interface placeholder / future path; nothing connects to AWS
+%%   thick red edge       = trust boundary crossing
+%%   orange subgraph      = human approval boundary
+%%
+%% Four boundaries are marked:
+%%   AWS-TB    telemetry leaves AWS: everything in it is attacker-influenced
+%%   SIEM-TB   SIEM/ingestion into our pipeline: validated by parse_event()
+%%   AI-TB     incident into the AI and model output back out: validated
+%%   HUMAN     approval boundary: every cloud action needs a person
+
+flowchart TB
+
+    %% --------------------------------------------------------------- AWS
+    subgraph AWS["AWS ACCOUNT 111122223333 (synthetic) -- UNTRUSTED TELEMETRY SOURCE"]
+        direction LR
+        CT["CloudTrail<br/>management + S3 data events"]
+        VPC["VPC Flow Logs"]
+        GD["GuardDuty findings"]
+        IAM["IAM<br/>users, roles, keys, policies"]
+        S3["S3<br/>corp-finance-archive"]
+        EC2["EC2<br/>instances, security groups"]
+    end
+
+    %% --------------------------------------------------- telemetry transport
+    subgraph TRANSPORT["TELEMETRY / FINDINGS TRANSPORT (future; not built)"]
+        direction LR
+        S3LOGS["S3 log bucket<br/>trail + flow log delivery"]
+        CWL["CloudWatch Logs"]
+        EB["EventBridge<br/>GuardDuty findings"]
+    end
+
+    SYNTH["data/aws_cloudtrail_samples.json<br/>37 synthetic events, used today"]
+
+    %% ----------------------------------------------------------- SIEM layer
+    subgraph SIEM_LAYER["SIEM / INGESTION -- SIEMProvider interface"]
+        direction LR
+        SIEM_MOCK["MockSIEMProvider<br/>IMPLEMENTED"]
+        SIEM_SPLUNK["SplunkProvider<br/>placeholder<br/>Splunk Add-on for AWS"]
+        SIEM_WAZUH["WazuhProvider<br/>placeholder<br/>aws-s3 wodle"]
+    end
+
+    %% ------------------------------------------------------------- core
+    subgraph CORE["TRUSTED CORE -- deterministic, no AI, no cloud credentials"]
+        direction TB
+        NORM["Normalization + validation<br/>parse_event: category cloud,<br/>host optional for cloud events"]
+        SCREEN["Injection screening<br/>User-Agent, role descriptions,<br/>request parameters"]
+        DETECT["Deterministic detection<br/>8 endpoint + 11 cloud rules<br/>one DetectionEngine"]
+        CORR["Correlation<br/>entities: principal, role issuer,<br/>access key, resource, IP"]
+        RISK["Risk scoring<br/>+ impair_defenses<br/>+ privileged_identity"]
+        MITRE["Pinned ATT&CK subset<br/>T1078.004 T1098.001 T1098.003<br/>T1562.007 T1562.008 T1580 T1530"]
+    end
+
+    %% ------------------------------------------------------------- AI
+    subgraph AI_LAYER["AI SOC ANALYST -- AIAnalyst interface (ADVISORY)"]
+        direction LR
+        AI_MOCK["MockAIAnalyst<br/>IMPLEMENTED<br/>cloud playbook"]
+        AI_OLLAMA["OllamaAnalyst<br/>placeholder"]
+        AI_HOSTED["HostedLLMAnalyst<br/>placeholder"]
+    end
+
+    VALIDATE["validate_analysis<br/>citations, ATT&CK IDs, action claims,<br/>response_action tier must match policy"]
+    MAPPER["requests_from_analysis<br/>structured response_action + target<br/>manual tasks and unknown actions dropped"]
+
+    %% -------------------------------------------------------------- human
+    subgraph HUMAN["HUMAN APPROVAL BOUNDARY -- every cloud action is T2+"]
+        direction TB
+        REVIEW["Analyst review<br/>evidence first, AI draft second"]
+        DECIDE{"approve / reject / pending<br/>demo: SIMULATED decision table"}
+    end
+
+    %% ----------------------------------------------------------- response
+    subgraph RESP_LAYER["RESPONSE -- ResponseProvider interface"]
+        direction TB
+        GATES["Base-class gates<br/>CLOUD_ACTIONS dry-run only,<br/>protected identities, target in evidence,<br/>approval, blast-radius cap"]
+        RESP_MOCK["MockResponseProvider<br/>IMPLEMENTED -- DRY RUN<br/>revoke key, disable user, detach policy,<br/>modify SG, isolate EC2, block indicator"]
+        RESP_AWS["AwsResponseProvider<br/>future; MFA-gated responder role<br/>NOT BUILT, NO AWS CALLS"]
+    end
+
+    AUDIT[("Audit log<br/>dry runs, refusals, rejections")]
+
+    %% ============================================================ edges
+    CT -.-> S3LOGS
+    CT -.-> CWL
+    VPC -.-> S3LOGS
+    GD -.-> EB
+    IAM -.-> CT
+    S3 -.-> CT
+    EC2 -.-> CT
+
+    S3LOGS -.-> SIEM_SPLUNK
+    S3LOGS -.-> SIEM_WAZUH
+    CWL -.-> SIEM_SPLUNK
+    EB -.-> SIEM_WAZUH
+    SYNTH --> SIEM_MOCK
+
+    SIEM_MOCK -- "AWS-TB + SIEM-TB<br/>attacker-influenced telemetry" --> NORM
+    SIEM_SPLUNK -.-> NORM
+    SIEM_WAZUH -.-> NORM
+
+    NORM --> SCREEN
+    NORM --> DETECT
+    MITRE -.-> DETECT
+    DETECT -- "alerts cite event_ids" --> CORR
+    CORR --> RISK
+    CORR -- "AI-TB incident in" --> AI_MOCK
+    CORR -.-> AI_OLLAMA
+    CORR -.-> AI_HOSTED
+    SCREEN -- "injection findings" --> AI_MOCK
+
+    AI_MOCK -- "AI-TB model output is untrusted" --> VALIDATE
+    AI_OLLAMA -.-> VALIDATE
+    AI_HOSTED -.-> VALIDATE
+    MITRE -.-> VALIDATE
+
+    RISK --> REVIEW
+    VALIDATE --> REVIEW
+    SCREEN --> REVIEW
+    VALIDATE --> MAPPER
+    MAPPER --> DECIDE
+    REVIEW --> DECIDE
+
+    DECIDE -- "HUMAN approved_by set by a person" --> GATES
+    GATES -- "dry run" --> RESP_MOCK
+    GATES -. "blocked in this build" .-> RESP_AWS
+    GATES -- "refused / rejected" --> AUDIT
+    RESP_MOCK --> AUDIT
+
+    %% =========================================================== styles
+    classDef implemented fill:#e6f4ea,stroke:#1e7e34,stroke-width:2px,color:#0b3d17
+    classDef placeholder fill:#f1f3f4,stroke:#80868b,stroke-width:1px,stroke-dasharray:5 4,color:#3c4043
+    classDef core fill:#e8f0fe,stroke:#1a56db,stroke-width:1px,color:#0b2a6b
+    classDef control fill:#fef7e0,stroke:#b06000,stroke-width:2px,color:#4a2800
+    classDef aws fill:#fce8e6,stroke:#c5221f,stroke-width:1px,color:#5c0f0d
+    classDef store fill:#ffffff,stroke:#3c4043,stroke-width:1px,color:#202124
+
+    class SIEM_MOCK,AI_MOCK,RESP_MOCK,SYNTH implemented
+    class SIEM_SPLUNK,SIEM_WAZUH,AI_OLLAMA,AI_HOSTED,RESP_AWS,S3LOGS,CWL,EB placeholder
+    class NORM,SCREEN,DETECT,CORR,RISK,MITRE core
+    class VALIDATE,MAPPER,GATES,DECIDE,REVIEW control
+    class CT,VPC,GD,IAM,S3,EC2 aws
+    class AUDIT store
+
+    style AWS fill:#fff5f5,stroke:#c5221f,stroke-width:2px,stroke-dasharray:6 4
+    style TRANSPORT fill:#fafafa,stroke:#80868b,stroke-width:1px,stroke-dasharray:5 4
+    style HUMAN fill:#fff8e1,stroke:#e37400,stroke-width:3px,stroke-dasharray:8 4
+    style CORE fill:#f8faff,stroke:#1a56db,stroke-width:1px
+    style SIEM_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+    style AI_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+    style RESP_LAYER fill:#fafafa,stroke:#5f6368,stroke-width:1px
+
+    %% Trust-boundary edges in red. Indices count edge declarations above in
+    %% order from 0. Verified by lint, not by eye.
+    linkStyle 12 stroke:#c5221f,stroke-width:3px
+    linkStyle 20 stroke:#c5221f,stroke-width:3px
+    linkStyle 24 stroke:#c5221f,stroke-width:3px
+    linkStyle 34 stroke:#e37400,stroke-width:3px
