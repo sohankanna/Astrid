@@ -591,11 +591,14 @@ def evaluate_representation(kind: str, truth_path: Path = GROUND_TRUTH_FILE,
     tn = len(ids) - tp - fp - fn
     metrics = evaluate(selected, ids, truth).to_dict()
     stages: dict[str, dict[str, int]] = {}
-    for event_id, label in truth.labels.items():
+    missed: dict[str, list[str]] = {}
+    for event_id, label in sorted(truth.labels.items()):
         if label.is_attack_related:
             row = stages.setdefault(label.attack_stage or "?", {"events": 0, "selected": 0})
             row["events"] += 1
             row["selected"] += event_id in selected
+            if event_id not in selected:
+                missed.setdefault(label.attack_stage or "?", []).append(event_id)
     return {
         "representation": kind,
         "ground_truth": truth_path.name,
@@ -608,6 +611,7 @@ def evaluate_representation(kind: str, truth_path: Path = GROUND_TRUTH_FILE,
         "critical_total": metrics["critical_total"], "critical_retained": metrics["critical_retained"],
         "missing_critical": metrics["missing_critical"],
         "per_stage": dict(sorted(stages.items())),
+        "missed_by_stage": missed,   # the FN events (listing only; derived from the same sets as FN)
         "stages_with_any_selected_event": sum(1 for s in stages.values() if s["selected"]),
         "stages_total": len(stages),
         "semantics": "FN = attack event not selected as evidence (discarded), not 'classified benign'.",

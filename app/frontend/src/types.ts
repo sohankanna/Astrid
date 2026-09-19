@@ -423,6 +423,25 @@ export interface CanonicalRepresentation {
   relationships: Record<string, unknown>;
 }
 
+export interface CanonicalEvaluation {
+  events: number;
+  selected: number;
+  TP: number;
+  FP: number;
+  FN: number;
+  TN: number;
+  precision: number | string;
+  recall: number | string;
+  f1: number | string;
+  critical_evidence_recall: number | string;
+  critical_total: number;
+  critical_retained: number;
+  per_stage: Record<string, { events: number; selected: number }>;
+  missed_by_stage: Record<string, string[]>;
+  stages_with_any_selected_event: number;
+  stages_total: number;
+}
+
 export interface CanonicalResult {
   dataset: string;
   dataset_note: string;
@@ -432,9 +451,7 @@ export interface CanonicalResult {
   evidence_context: { generated: boolean; incidents?: number; evidence_objects?: number; estimated_tokens?: number };
   ground_truth_available: boolean;
   ground_truth: string;
-  evaluation: Record<"raw" | "siem", { TP: number; FP: number; FN: number; TN: number;
-    precision: number | string; recall: number | string; f1: number | string;
-    critical_evidence_recall: number | string }> | null;
+  evaluation: Record<"raw" | "siem", CanonicalEvaluation> | null;
   peak_memory_mb: number | null;
   measured_at: string;
 }
