@@ -1,5 +1,6 @@
 import type { IncidentDetail } from "../types";
 import { ACTION_LABELS, STATUS_LABELS, humanize } from "../format";
+import { Disclosure } from "./Disclosure";
 import { Layer } from "./Layer";
 
 interface Props {
@@ -23,7 +24,7 @@ export function ResponsePanel({ detail, busy, onPlan, onDecide }: Props) {
   return (
     <section className="block response-panel">
       <header className="block-head">
-        <h3>RECOMMENDED RESPONSE</h3>
+        <h3>Recommended response</h3>
         <Layer kind="response" />
       </header>
       <div className="dry-run-banner">
@@ -67,6 +68,10 @@ export function ResponsePanel({ detail, busy, onPlan, onDecide }: Props) {
                     <span className="action-name">{ACTION_LABELS[a.action] ?? humanize(a.action).toUpperCase()}</span>
                     <span className={`sev-badge small ${RISK_CLASS[a.risk] ?? ""}`}>RISK {a.risk}</span>
                   </header>
+                  <p className="muted">{a.target}</p>
+                  <strong className={"action-status status-" + a.status.toLowerCase()}>{STATUS_LABELS[a.status] ?? a.status}</strong>
+                  <p>{a.requires_approval ? "Human approval required" : "No approval required by policy"}</p>
+                  <Disclosure label="View action details" title={ACTION_LABELS[a.action] ?? a.action}>
                   <div className="action-kv">
                     <span>Target</span>
                     <code>{a.target}</code>
@@ -89,6 +94,7 @@ export function ResponsePanel({ detail, busy, onPlan, onDecide }: Props) {
                       {a.decided_by && <div className="muted">decided by: {a.decided_by}</div>}
                     </div>
                   )}
+                  </Disclosure>
                   {open && (
                     <div className="action-buttons">
                       <button className="btn approve" disabled={deciding} onClick={() => onDecide(a.action_id, "approve")}>

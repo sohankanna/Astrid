@@ -4,6 +4,8 @@ import { STATUS_LABELS, TACTIC_ORDER, clock, dateTime, humanize, incidentLabel, 
 import { AiPanel } from "./AiPanel";
 import { ResponsePanel } from "./ResponsePanel";
 import { Layer } from "./Layer";
+import { Disclosure, Drawer, Tabs, TabPanel } from "./Disclosure";
+import { CanonicalAttackPath } from "./CanonicalAttackPath";
 
 interface Props {
   detail: IncidentDetail | null;
@@ -13,9 +15,17 @@ interface Props {
   onAnalyze: () => void;
   onPlan: () => void;
   onDecide: (actionId: string, decision: "approve" | "reject") => void;
+  /** True when the canonical 50K scenario is active: Attack Path shows the audited canonical path. */
+  canonical?: boolean;
 }
 
-export function Investigation({ detail, loading, error, busy, onAnalyze, onPlan, onDecide }: Props) {
+const INCIDENT_TABS = ["Overview", "Evidence", "Attack Path", "AI", "Response"] as const;
+
+export function Investigation({ detail, loading, error, busy, onAnalyze, onPlan, onDecide, canonical = false }: Props) {
+  const [showCanonical, setShowCanonical] = useState(false);
+  const [tab, setTab] = useState<(typeof INCIDENT_TABS)[number]>("Overview");
+  const [eventIds, setEventIds] = useState<string[] | null>(null);
+  useEffect(() => { setTab("Overview"); setEventIds(null); }, [detail?.incident.incident_id]);
   if (error) {
     return (
       <section className="panel investigation">
@@ -95,13 +105,32 @@ export function Investigation({ detail, loading, error, busy, onAnalyze, onPlan,
         </div>
       )}
 
-      <AttackGraph nodes={detail.attack_chain} timeline={detail.timeline} />
 
-      <div className="two-col">
-        <MitrePanel entries={detail.mitre} timeline={detail.timeline} />
-        <section className="block">
+      <Tabs id="incident" tabs={INCIDENT_TABS} value={tab} onChange={setTab} />
+      <TabPanel id="incident" index={0} active={tab === "Overview"}>
+        <div className="overview-metrics">
+          <div><strong>{incident.alert_count}</strong><span>Related alerts</span></div>
+          <div><strong>{incident.event_count}</strong><span>Evidence events</span></div>
+          <div><strong>{detail.analysis ? detail.analysis.confidence : "Not run"}</strong><span>AI status / confidence</span></div>
+        </div>
+        <dl className="overview-assets">
+          <dt>Affected hosts</dt><dd>{incident.hosts.join(", ") || "—"}</dd>
+          <dt>Cloud accounts</dt><dd>{incident.cloud_accounts.join(", ") || "—"}</dd>
+          <dt>Identities</dt><dd>{incident.users.join(", ") || "—"}</dd>
+        </dl>
+        <h3>Attack progression</h3>
+        <div className="progression">{detail.attack_chain.filter((node, i, nodes) => i === 0 || node.tactic !== nodes[i - 1].tactic).map((node, i) => <span key={node.step}>
+          {i > 0 && <span aria-hidden="true"> → </span>}{node.tactic}
+        </span>)}</div>
+        <h3>Key findings <span className="muted">· correlated alerts</span></h3>
+        <ul className="key-findings">{detail.correlated.alerts.slice(0, 4).map((alert) =>
+          <li key={alert.alert_id}>{alert.title}</li>)}</ul>
+        {!detail.correlated.alerts.length && <p className="muted">No correlated alerts.</p>}
+        <div className="disclosure-actions">
+          <button className="btn primary" onClick={() => { setEventIds(null); setTab("Evidence"); }}>View evidence →</button>
+          <Disclosure label="View risk breakdown">        <section className="block">
           <header className="block-head">
-            <h3>RISK SCORE BREAKDOWN</h3>
+            <h3>Risk score breakdown</h3>
             <Layer kind="correlated" />
           </header>
           <p className="block-note">
@@ -116,19 +145,36 @@ export function Investigation({ detail, loading, error, busy, onAnalyze, onPlan,
               </li>
             ))}
           </ul>
-        </section>
-      </div>
-
-      <Timeline events={detail.timeline} />
-
-      <AiPanel detail={detail} busy={busy === "analyze"} onAnalyze={onAnalyze} />
-
-      <ResponsePanel
-        detail={detail}
-        busy={busy}
-        onPlan={onPlan}
-        onDecide={onDecide}
-      />
+        </section></Disclosure>
+          <Disclosure label="View correlated alerts">
+            {detail.correlated.alerts.map((alert) => <article className="finding-row" key={alert.alert_id}>
+              <strong>{alert.title}</strong><p>{alert.description}</p><code>{alert.alert_id} · {alert.rule_id}</code>
+              <p>Confidence: {alert.confidence} · Severity: {alert.severity}</p>
+              <p className="muted">{alert.evidence_event_ids.join(" · ")}</p>
+            </article>)}
+          </Disclosure>
+        </div>
+      </TabPanel>
+      <TabPanel id="incident" index={1} active={tab === "Evidence"}>
+        <EvidenceBrowser key={incident.incident_id} events={detail.timeline} eventIds={eventIds} onClear={() => setEventIds(null)} />
+      </TabPanel>
+      <TabPanel id="incident" index={2} active={tab === "Attack Path"}>
+        {canonical || showCanonical ? <>
+          <CanonicalAttackPath />
+          {!canonical && <button className="btn" onClick={() => setShowCanonical(false)}>Back to incident attack path</button>}
+        </> : <>
+        <button className="btn ap-open" onClick={() => setShowCanonical(true)}>View canonical 50K attack path</button>
+        <AttackGraph key={incident.incident_id} nodes={detail.attack_chain} timeline={detail.timeline} mitre={detail.mitre}
+          onEvidence={(ids) => { setEventIds(ids); setTab("Evidence"); }} />
+        <Disclosure label="View MITRE details"><MitrePanel entries={detail.mitre} timeline={detail.timeline} /></Disclosure>
+        </>}
+      </TabPanel>
+      <TabPanel id="incident" index={3} active={tab === "AI"}>
+        <AiPanel key={incident.incident_id} detail={detail} busy={busy === "analyze"} onAnalyze={onAnalyze} />
+      </TabPanel>
+      <TabPanel id="incident" index={4} active={tab === "Response"}>
+        <ResponsePanel detail={detail} busy={busy} onPlan={onPlan} onDecide={onDecide} />
+      </TabPanel>
     </section>
   );
 }
@@ -137,9 +183,9 @@ export function Investigation({ detail, loading, error, busy, onAnalyze, onPlan,
 // Attack chain graph
 // ---------------------------------------------------------------------------
 
-function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventView[] }) {
+function AttackGraph({ nodes, timeline, mitre, onEvidence }: { nodes: ChainNode[]; timeline: EventView[]; mitre: MitreEntry[]; onEvidence: (ids: string[]) => void }) {
   const [selected, setSelected] = useState<number | null>(null);
-  useEffect(() => setSelected(nodes.length ? 1 : null), [nodes]);
+  const [nodeView, setNodeView] = useState<"detail" | "mitre">("detail");
 
   // Every tactic of every mapped technique, not just each node's first one.
   const reached = useMemo(
@@ -152,7 +198,7 @@ function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventV
   return (
     <section className="block attack-graph">
       <header className="block-head">
-        <h3>ATTACK CHAIN</h3>
+        <h3>Attack chain</h3>
         <Layer kind="correlated" />
         <span className="block-note inline">
           Built only from correlated alerts, ordered by first evidence. Click a node.
@@ -176,7 +222,7 @@ function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventV
               <li key={n.step} className="chain-item">
                 <button
                   className={`chain-node ${sevClass(n.severity)} ${n.step === selected ? "selected" : ""}`}
-                  onClick={() => setSelected(n.step)}
+                  onClick={() => { setSelected(n.step); setNodeView("detail"); }}
                 >
                   <span className="cn-step">{String(n.step).padStart(2, "0")}</span>
                   <span className="cn-tactic">{n.tactic}</span>
@@ -194,6 +240,7 @@ function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventV
       )}
 
       {node && (
+        <Drawer title={node.title} onClose={() => setSelected(null)}>
         <div className={`node-detail ${sevClass(node.severity)}`}>
           <div className="nd-head">
             <strong>
@@ -235,6 +282,12 @@ function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventV
               ))}
             </div>
           </div>
+          <p><strong>Host: </strong>{[...new Set(node.event_ids.flatMap((id) => eventsById.get(id)?.host ? [eventsById.get(id)!.host] : []))].join(", ") || "—"} · <strong>Evidence events: </strong>{node.event_ids.length}</p>
+          <div className="disclosure-actions">
+            <button className="btn primary" onClick={() => { onEvidence(node.event_ids); setSelected(null); }}>View evidence</button>
+            <button className="btn" onClick={() => setNodeView(nodeView === "mitre" ? "detail" : "mitre")}>{nodeView === "mitre" ? "Hide MITRE details" : "View MITRE details"}</button>
+          </div>
+          {nodeView === "mitre" && <MitrePanel entries={mitre.filter((m) => node.techniques.some((t) => t.technique_id === m.technique_id))} timeline={timeline} />}
           <label>SUPPORTING EVENTS</label>
           <ul className="nd-events">
             {node.event_ids.map((id) => {
@@ -247,6 +300,7 @@ function AttackGraph({ nodes, timeline }: { nodes: ChainNode[]; timeline: EventV
             })}
           </ul>
         </div>
+        </Drawer>
       )}
     </section>
   );
@@ -328,7 +382,7 @@ function Timeline({ events }: { events: EventView[] }) {
   return (
     <section className="block">
       <header className="block-head">
-        <h3>EVIDENCE TIMELINE</h3>
+        <h3>Evidence timeline</h3>
         <Layer kind="observed" />
         <span className="block-note inline">
           {events.length} events the detections cite. This is what the AI reasons over; it cannot add to it.
@@ -412,4 +466,34 @@ function Timeline({ events }: { events: EventView[] }) {
       )}
     </section>
   );
+}
+
+
+function EvidenceBrowser({ events, eventIds, onClear }: { events: EventView[]; eventIds: string[] | null; onClear: () => void }) {
+  const [filter, setFilter] = useState("All");
+  const [selected, setSelected] = useState<EventView | null>(null);
+  useEffect(() => setFilter("All"), [eventIds]);
+  const visible = events.filter((e) => (!eventIds || eventIds.includes(e.event_id)) &&
+    (filter === "All" || (filter === "Critical" && e.severity === "critical") ||
+    (filter === "Authentication" && e.category === "authentication") ||
+    (filter === "Cloud" && (e.category === "cloud" || !!e.account_id)) ||
+    (filter === "Endpoint" && !!e.host && !e.account_id && e.category !== "cloud")));
+  return <section className="evidence-browser">
+    <header className="block-head"><h3>Evidence</h3><Layer kind="observed" /></header>
+    <div className="filter-row" aria-label="Evidence filters">{["All", "Critical", "Authentication", "Endpoint", "Cloud"].map((name) =>
+      <button key={name} className="btn" aria-pressed={filter === name} onClick={() => setFilter(name)}>{name}</button>)}</div>
+    {eventIds && <p className="muted">Showing attack-node evidence. <button className="link" onClick={onClear}>Show all incident evidence</button></p>}
+    <p className="muted">{visible.length} of {events.length} evidence events</p>
+    <ul className="evidence-list">{visible.map((e) => <li key={e.event_id}>
+      <div><code>{e.event_id}</code><time>{clock(e.timestamp)}</time><span className={"sev-badge " + sevClass(e.severity)}>{e.severity}</span></div>
+      <strong>{e.summary ?? humanize(e.action)}</strong>
+      <p className="muted">{[e.source_ip, e.destination || e.host || e.account_id].filter(Boolean).join(" → ") || e.source}</p>
+      {!!e.injection_flags.length && <p className="warn-text">Untrusted instruction text flagged</p>}
+      <button className="btn" aria-haspopup="dialog" onClick={() => setSelected(e)}>View source event</button>
+    </li>)}</ul>
+    {!visible.length && <p className="empty">No evidence matches this filter.</p>}
+    {selected && <Drawer title={"Source event · " + selected.event_id} onClose={() => setSelected(null)}>
+      <Timeline events={[selected]} />
+    </Drawer>}
+  </section>;
 }

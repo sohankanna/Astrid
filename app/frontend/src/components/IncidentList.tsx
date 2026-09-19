@@ -18,12 +18,12 @@ export function IncidentList({ incidents, selectedId, onSelect, now }: Props) {
   return (
     <section className="panel incident-list">
       <header className="panel-head">
-        <h2>ACTIVE INCIDENTS</h2>
+        <h2>Active incidents</h2>
         <span className="count">{incidents.length}</span>
       </header>
       {incidents.length === 0 ? (
         <div className="empty">
-          <strong>NO ACTIVE INCIDENTS</strong>
+          <strong>No active incidents</strong>
           <p>Deterministic detections produced nothing to correlate for this scenario.</p>
           <p>For benign or injection-only scenarios this is the expected, correct result.</p>
         </div>

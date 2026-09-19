@@ -226,7 +226,7 @@ export default function App() {
         </div>
       )}
       {view === "lab" ? (
-        <EfficiencyLab />
+        <EfficiencyLab incidentDetail={detail} />
       ) : (
         <>
       <MetricsBar metrics={metrics} />
@@ -273,6 +273,7 @@ export default function App() {
           onAnalyze={analyze}
           onPlan={plan}
           onDecide={decide}
+          canonical={metrics?.scenario.scenario_id === "canonical-50k"}
         />
       </main>
         </>

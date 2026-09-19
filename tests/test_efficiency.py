@@ -217,6 +217,37 @@ class TestRetention(unittest.TestCase):
 
 
 class TestEconomics(unittest.TestCase):
+    def test_independent_recomputation_across_scales(self) -> None:
+        """Every displayed cost quantity equals the textbook formula
+        tokens / 1e6 * price, recomputed here without compare_costs internals.
+        Includes the small-scale case where Path B is larger (negative savings)."""
+        pricing = ef.Pricing()   # example rates 5 / 25 per 1M tokens
+        self.assertEqual((pricing.input_per_mtok, pricing.output_per_mtok), (5.0, 25.0))
+        self.assertIn("not a vendor quote", pricing.label)
+        out = ef.ESTIMATED_OUTPUT_TOKENS
+        self.assertEqual(out, 2500, "output held constant to isolate the input-context effect")
+        for raw_tokens, ctx_tokens in ((16_889, 25_403), (117_288, 25_358), (111_551_326, 27_514)):
+            c = ef.compare_costs(raw_tokens, ctx_tokens, pricing, context_window=200_000)
+            a = raw_tokens / 1e6 * 5 + out / 1e6 * 25
+            b = ctx_tokens / 1e6 * 5 + out / 1e6 * 25
+            self.assertAlmostEqual(c["baseline"]["total_cost"], a)
+            self.assertAlmostEqual(c["evidence"]["total_cost"], b)
+            self.assertAlmostEqual(c["baseline"]["output_cost"], c["evidence"]["output_cost"])
+            self.assertEqual(c["token_reduction_percent"], round((1 - ctx_tokens / raw_tokens) * 100, 2))
+            self.assertEqual(c["cost_reduction_percent"], round((1 - b / a) * 100, 2))
+            for n in (1, 100, 1_000, 10_000):
+                scaled = ef.compare_costs(raw_tokens, ctx_tokens, pricing, investigations=n)
+                self.assertAlmostEqual(scaled["baseline"]["total_for_investigations"], a * n)
+                self.assertAlmostEqual(scaled["evidence"]["total_for_investigations"], b * n)
+                self.assertAlmostEqual(scaled["savings_for_investigations"], (a - b) * n)
+            self.assertEqual(c["baseline"]["context_windows_needed"], math.ceil(raw_tokens / 200_000))
+            self.assertEqual(c["baseline"]["exceeds_context_window"], raw_tokens > 200_000)
+        tiny = ef.compare_costs(16_889, 25_403, pricing)
+        self.assertLess(tiny["token_reduction_percent"], 0, "negative reduction is reported, not clamped")
+        self.assertLess(tiny["savings_for_investigations"], 0)
+        big = ef.compare_costs(111_551_326, 27_514, pricing, context_window=200_000)
+        self.assertEqual(big["baseline"]["context_windows_needed"], 558)
+
     def test_cost_formula(self) -> None:
         pricing = ef.Pricing(input_per_mtok=3.0, output_per_mtok=15.0)
         cost = ef.token_cost(2_000_000, 100_000, pricing)

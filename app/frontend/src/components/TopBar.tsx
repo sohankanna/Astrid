@@ -29,20 +29,20 @@ export function TopBar({ health, backendDown, view, onView }: Props) {
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark">◆</span>
-        <span className="brand-name">AI SOC COMMAND CENTER</span>
+        <span className="brand-name">AI SOC Command Center</span>
         <span className="env-tag">{health?.environment ?? "LOCAL / OFFLINE LAB"}</span>
       </div>
       <nav className="views">
-        <button className={view === "console" ? "active" : ""} onClick={() => onView("console")}>SOC CONSOLE</button>
-        <button className={view === "lab" ? "active" : ""} onClick={() => onView("lab")}>AI EFFICIENCY LAB</button>
+        <button className={view === "console" ? "active" : ""} onClick={() => onView("console")}>SOC Console</button>
+        <button className={view === "lab" ? "active" : ""} onClick={() => onView("lab")}>AI Efficiency Lab</button>
       </nav>
       <div className="indicators">
-        <Indicator ok={up && !!health?.soc_online} label={up ? "SOC ONLINE" : "SOC OFFLINE"} />
-        <Indicator ok={up && !!health?.siem.connected} label={up ? "SIEM CONNECTED" : "SIEM UNREACHABLE"} />
-        <Indicator ok={up && !!health?.ai_analyst.ready} label={up ? "AI ANALYST READY" : "AI ANALYST UNAVAILABLE"} />
+        <Indicator ok={up && !!health?.soc_online} label={up ? "SOC online" : "SOC offline"} />
+        <Indicator ok={up && !!health?.siem.connected} label={up ? "SIEM connected" : "SIEM unreachable"} />
+        <Indicator ok={up && !!health?.ai_analyst.ready} label={up ? "AI analyst ready" : "AI analyst unavailable"} />
         <Indicator
           ok={up && !!health?.response_engine.armed}
-          label={up ? `RESPONSE ENGINE ARMED · ${health?.response_engine.mode}` : "RESPONSE ENGINE OFFLINE"}
+          label={up ? `Response engine armed · ${health?.response_engine.mode}` : "Response engine offline"}
         />
       </div>
       <div className="clock">

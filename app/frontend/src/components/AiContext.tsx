@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Drawer } from "./Disclosure";
 import { ApiError, api } from "../api";
 import type { ContextPack, IncidentDetail } from "../types";
 
@@ -101,6 +102,7 @@ export function AiContext({ detail }: Props) {
         </button>
       </div>
       {open && (
+        <Drawer title={"Exact redacted context · " + incidentId} onClose={() => setOpen(false)}>
         <div className="ctx-pack">
           {error ? (
             <span className="warn-text">{error}</span>
@@ -110,6 +112,7 @@ export function AiContext({ detail }: Props) {
             <span className="muted">Loading…</span>
           )}
         </div>
+        </Drawer>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import type { IncidentDetail } from "../types";
+import { Disclosure } from "./Disclosure";
 import { Layer } from "./Layer";
 import { AiContext } from "./AiContext";
 import { Citations, InvestigationSections } from "./Citations";
@@ -16,13 +17,15 @@ export function AiPanel({ detail, busy, onAnalyze }: Props) {
     <section className="block ai-panel">
       <header className="block-head">
         <h3>
-          <span className="ai-glyph">◈</span> AI SECURITY ANALYST
+          <span className="ai-glyph">◈</span> AI investigation
         </h3>
         <Layer kind="ai" />
         {analysis && <span className="model-tag">model: {analysis.model} · advisory only</span>}
       </header>
 
-      <AiContext detail={detail} />
+      <p className="muted">Provider: {detail.ai_context.last_run ? (detail.ai_context.last_run.live_model ? detail.ai_context.last_run.model : "Mock / offline") : detail.ai_context.configured_provider + " · not yet run"}</p>
+      {detail.ai_context.last_run?.fallback_reason && <p className="warn-text">{detail.ai_context.last_run.fallback_reason}</p>}
+      <Disclosure label="View context details"><AiContext detail={detail} /></Disclosure>
 
       {!analysis ? (
         <div className="ai-empty">
@@ -52,7 +55,14 @@ export function AiPanel({ detail, busy, onAnalyze }: Props) {
             <p>{analysis.summary}</p>
           </div>
 
-          <Citations analysis={analysis} timeline={detail.timeline} />
+          <div className="ai-section wide"><label>Confidence</label><strong className="assessment-confidence">{analysis.confidence}</strong></div>
+          <div className="disclosure-actions wide">
+          <Disclosure label="View citations">
+            <Citations analysis={analysis} timeline={detail.timeline} />
+            {!analysis.citations.length && <p className="muted">No structured citations returned. Supporting event references are listed below.</p>}
+            {analysis.evidence.map((item, i) => <div className="finding-row" key={i}><strong>{item.observation}</strong><p>{item.event_ids.join(" · ")}</p></div>)}
+          </Disclosure>
+          <Disclosure label="View reasoning"><div className="ai-grid">
           <InvestigationSections analysis={analysis} />
 
           <div className="ai-section">
@@ -138,6 +148,8 @@ export function AiPanel({ detail, busy, onAnalyze }: Props) {
               ))}
             </ul>
           </div>
+
+          </div></Disclosure></div>
 
           <div className={`validation ${analysis.validation_warnings.length ? "bad" : "good"}`}>
             {analysis.validation_warnings.length ? (
