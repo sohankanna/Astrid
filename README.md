@@ -24,27 +24,8 @@ Only that evidence reaches the AI investigator. Its findings must cite evidence 
 
 ## Architecture
 
-```
-Wazuh / Splunk / CloudTrail / EDR
-        ↓
-Normalization                     deterministic
-        ↓
-Detection                         deterministic (rules / baseline signals)
-        ↓
-Correlation Engine                deterministic (entity + time linking, ranking)
-        ↓
-Incident Candidate                deterministic
-        ↓
-Evidence / Context Engine         deterministic (relevance, aggregation, budget, redaction)
-        ↓
-Attack Path                       deterministic, labelled OBSERVED / CORRELATED / INFERRED
-        ↓
-AI Investigator                   AI (Claude, or offline mock); cites evidence IDs
-        ↓
-Impact / Response Simulation      deterministic policy tiers, dry-run only
-        ↓
-Human Approval                    analyst decision
-```
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/8db2cd39-0306-43ec-a7ae-4a3ae5cd61d9" />
+
 
 **Only the AI Investigator uses a model.** Everything before it is deterministic and reproducible. Everything after it is policy-enforced: the model cannot choose action tiers or claim that an action was executed.
 
