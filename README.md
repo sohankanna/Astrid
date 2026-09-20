@@ -282,6 +282,8 @@ Achieved during the hackathon:
 - AI Efficiency & Economics Lab: scaling benchmark from 100 to 1M events, and the cost model
 - Canonical 50K integration: validation, adapter, measured pipeline, console scenario
 - Reconstructed ground-truth evaluation (TP/FP/FN, critical evidence recall)
+
+- 
 - Read-only attack-chain audit of every stage against telemetry
 - Attack-path frontend with OBSERVED / CORRELATED / INFERRED / MISSED semantics
 - Safety controls: redaction, pseudonymization, injection screening, secret tripwire
