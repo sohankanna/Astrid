@@ -46,6 +46,14 @@ Only that evidence reaches the AI investigator. Its findings must cite evidence 
 | Human-gated, dry-run response layer with protected assets | `app/soc_core/providers/response.py` |
 | Untrusted-content / prompt-injection screening | `app/soc_core/providers/ai_analyst.py` |
 
+## SOC Analyst Console
+
+The SOC Analyst Console provides a centralized interface for incident investigation, evidence analysis, attack-path visualization, and human-gated response.
+
+<img width="1259" height="633" alt="a1" src="https://github.com/user-attachments/assets/406287c1-c911-4b69-ba24-1de8949f1db7" />
+
+*Figure 1. AI SOC Command Center showing active incidents, alert severity, affected assets, investigation status, and the analyst investigation workspace.*
+
 ## Canonical 50K Benchmark
 
 The dataset was supplied by the scenario author in two representations: raw source telemetry and SIEM connector events.
@@ -77,6 +85,11 @@ The original generator (which holds the true labels) was **not present**. Event-
 | F1 | **86.9%** |
 | Critical evidence recall | **83.7% (82/98)** |
 
+<img width="1252" height="479" alt="a2" src="https://github.com/user-attachments/assets/6785586a-97f3-4545-a301-3b067dfa5221" />
+
+
+*Figure 2. Canonical 50K evidence-fidelity dashboard showing selected evidence, true positives, false positives, false negatives, precision, recall, F1 score, and critical evidence recall.*
+
 - **TP**: an attack event retained by the evidence engine.
 - **FP**: a background event retained as investigation context. All 10 are the victim account's normal activity on the compromised host during the attack window.
 - **FN**: an attack event discarded by the evidence engine. **Discarded does not mean "classified benign".** The engine selects evidence; it does not classify.
@@ -95,6 +108,11 @@ The engine ran with **default settings and was not tuned against this dataset.**
 | Valid-account / pivot logons (EVT-98–104) | 7 | Internal pivot source addresses do not trigger the external-source signal |
 | **Total** | **24** | |
 
+<img width="1216" height="471" alt="a3" src="https://github.com/user-attachments/assets/7c40feaa-803f-4f0d-8c4e-896ba61bc73b" />
+
+
+*Figure 3. Stage-level evidence retention showing the number of attack events retained across the reconstructed attack stages.*
+
 These causes are documented, not fixed. Fixing them would mean tuning against the evaluation labels.
 
 ## Attack Path
@@ -111,6 +129,11 @@ The canonical attack path is a **correlation and inference over real telemetry, 
 > phishing → endpoint compromise → credential harvesting → pivot → finance staging → USB transfer → archive deletion
 
 The console's Attack Path therefore shows two branches (WEB01 and WS07) and a correction note.
+
+<img width="947" height="366" alt="a4" src="https://github.com/user-attachments/assets/d0d2f91d-a224-4c3c-8be0-2d1562d8b81b" />
+
+
+*Figure 4. Attack Path visualization showing the progression of the investigated attack and the OBSERVED, CORRELATED, and INFERRED relationships between attack stages.*
 
 ## AI Evidence Safety
 
@@ -153,6 +176,10 @@ Token reduction is 99.98% and cost reduction 99.96%.
 **Context window.** Path A would need **558** windows of 200K tokens per investigation. It could not run as a single request, so its cost is a **theoretical lower bound** for a design that is not viable. It is not a claim that a production system would send 111M tokens in one request.
 
 At **100 events** the evidence pack is *larger* than the raw log (−50.41%), because it carries fixed structure. That result is shown as measured.
+
+<img width="1258" height="504" alt="a5" src="https://github.com/user-attachments/assets/f682b68a-8e0f-4434-84d4-9f186939f7ec" />
+
+*Figure 5. AI Efficiency & Economics Lab comparing the theoretical raw-context baseline with the evidence-context architecture, including estimated investigation cost and token reduction.*
 
 ## Results
 
